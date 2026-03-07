@@ -1896,6 +1896,92 @@ def sanitise_name(name: str) -> str:
     return cleaned or "Unknown"
 
 
+def _series_title_from_dir(series_dir: Path) -> str:
+    """
+    Derive a clean display title from a Jellyfin series directory name.
+    Strips an optional trailing provider tag: "Title [anidb-1234]" -> "Title".
+    """
+    name = re.sub(r"\s+\[[^\]]+\]\s*$", "", series_dir.name).strip()
+    return sanitise_name(name)
+
+
+def normalize_series_filenames_for_jellyfin(series_dir: Path, dry_run: bool = False) -> dict[str, int]:
+    """
+    Normalize video filenames to Jellyfin-friendly patterns:
+      TV:      "<Series Title> - S01E01.ext"
+      Specials "<Series Title> - S00E01.ext"
+
+    Returns aggregate counters:
+      {"renamed": N, "already": N, "skipped": N, "collisions": N}
+    """
+    series_title = _series_title_from_dir(series_dir)
+    season_pat = re.compile(r"^Season (\d{2})$", re.IGNORECASE)
+    out = {"renamed": 0, "already": 0, "skipped": 0, "collisions": 0}
+
+    for season_dir in sorted(p for p in series_dir.iterdir() if p.is_dir()):
+        m = season_pat.match(season_dir.name)
+        if not m:
+            continue
+        season_num = int(m.group(1))
+        if season_num < 0 or season_num > 99:
+            continue
+
+        files = sorted(
+            p for p in season_dir.iterdir()
+            if p.is_file() and p.suffix.lower() in _VIDEO_EXT
+        )
+        if not files:
+            continue
+
+        used_eps: set[int] = set()
+        for p in files:
+            if (ep := extract_episode_number(p.name)) is not None:
+                used_eps.add(ep)
+            else:
+                m_e = re.search(rf"S{season_num:02d}E(\d{{2,3}})", p.stem, re.IGNORECASE)
+                if m_e:
+                    used_eps.add(int(m_e.group(1)))
+        next_special = 1
+        while next_special in used_eps:
+            next_special += 1
+
+        for src in files:
+            ep_num = extract_episode_number(src.name)
+            if ep_num is None:
+                if season_num == 0:
+                    ep_num = next_special
+                    next_special += 1
+                    while next_special in used_eps:
+                        next_special += 1
+                else:
+                    out["skipped"] += 1
+                    continue
+
+            used_eps.add(ep_num)
+            target_name = f"{series_title} - S{season_num:02d}E{ep_num:02d}{src.suffix.lower()}"
+            target = season_dir / target_name
+            if src.name == target_name:
+                out["already"] += 1
+                continue
+            if target.exists() and target != src:
+                out["collisions"] += 1
+                log.warning("Filename normalize collision: %s -> %s", src.name, target.name)
+                continue
+
+            if dry_run:
+                out["renamed"] += 1
+                continue
+            try:
+                src.rename(target)
+                out["renamed"] += 1
+                log.info("Renamed for Jellyfin: %s -> %s", src.name, target.name)
+            except OSError as exc:
+                out["skipped"] += 1
+                log.warning("Rename failed %s -> %s: %s", src, target, exc)
+
+    return out
+
+
 def build_save_path(anime_dir: Path, anime_name: str, season: int | None,
                     provider_id: str = "") -> str:
     """
@@ -3799,6 +3885,13 @@ def run_one_season(
 
     # Encoding/transcoding phase removed: files go directly from qBittorrent to Jellyfin.
     # Continue with watch list update + Jellyfin rescan only.
+    _series_dir = Path(save_path).parent
+    _norm = normalize_series_filenames_for_jellyfin(_series_dir, dry_run=args.dry_run)
+    print(f"  {c(C.DIM, 'Filename normalize:')} "
+          f"{c(C.SUCCESS, str(_norm['renamed']))} renamed, "
+          f"{c(C.DIM, str(_norm['already']))} already canonical, "
+          f"{c(C.WARN if _norm['collisions'] else C.DIM, str(_norm['collisions']) + ' collisions')}, "
+          f"{c(C.WARN if _norm['skipped'] else C.DIM, str(_norm['skipped']) + ' skipped')}")
     # ── Update watch list ─────────────────────────────────────────────────────
     # Re-query AniList to get current airing status for this season.
     # Uses the same data already fetched during verify_episode_coverage but
@@ -3825,6 +3918,7 @@ def run_one_season(
 
     # ── Jellyfin library rescan ───────────────────────────────────────────────
     print()
+    trigger_jellyfin_rescan(season_label)
 
     VISUAL_STATS["seasons"] += 1
     VISUAL_STATS["encoded_ok"] += 0
@@ -4385,6 +4479,13 @@ def run_watch_mode(args: argparse.Namespace, anime_dir: Path) -> None:
         monitor.stop()
 
         season_label = f"{entry['anime_name']} Season {entry['season']}"
+        series_dir = Path(save_path).parent
+        _norm = normalize_series_filenames_for_jellyfin(series_dir, dry_run=args.dry_run)
+        print(f"  {c(C.DIM, 'Filename normalize:')} "
+              f"{c(C.SUCCESS, str(_norm['renamed']))} renamed, "
+              f"{c(C.DIM, str(_norm['already']))} already canonical, "
+              f"{c(C.WARN if _norm['collisions'] else C.DIM, str(_norm['collisions']) + ' collisions')}, "
+              f"{c(C.WARN if _norm['skipped'] else C.DIM, str(_norm['skipped']) + ' skipped')}")
 
         # Update last_episode in watch list
         highest_new = max(ep["episode_num"] for ep in new_eps)
