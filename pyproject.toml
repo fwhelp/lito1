@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [project.scripts]
-anime-pipeline = "anime_pipeline.cli:main"
+anime = "anime_pipeline.cli:main"
 
 [tool.setuptools]
 packages = ["anime_pipeline"]

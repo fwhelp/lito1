@@ -30,7 +30,7 @@ pip install -e .
 ## Run
 
 ```bash
-anime-pipeline
+anime
 ```
 
 or:
