@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-anime_pipeline.py — Unified Nyaa → qBittorrent → HandBrake/FFmpeg hard-sub pipeline.
+anime_pipeline.py - Unified Nyaa -> qBittorrent -> Jellyfin pipeline.
 
 Flow:
   1. Auto-discover the Jellyfin Anime directory (non-C: drive, parent = "media")
   2. Search nyaa.si, auto-rank sub groups, prompt for anime title + season
   3. Add torrents to qBittorrent, monitor until complete, auto-cleanup
-  4. Auto-select JP audio + EN dialogue subs, hard-sub encode with HandBrakeCLI
-     or FFmpeg NVENC hybrid filterchain (--engine ffmpeg-nvenc)
-  5. Optionally delete originals after a clean run
+  4. Route completed downloads directly into the Jellyfin media structure
+  5. Trigger Jellyfin library rescan for newly downloaded content
+
 
 Requirements:
     pip install requests beautifulsoup4 qbittorrent-api anitopy guessit
@@ -23,8 +23,8 @@ Usage:
     python anime_pipeline.py
     python anime_pipeline.py --pick-group --season 2
     python anime_pipeline.py --no-confirm --dry-run
-    python anime_pipeline.py --keep-originals
-    python anime_pipeline.py --engine ffmpeg-nvenc   # GPU-accelerated hardsub
+    python anime_pipeline.py --cleanup-files
+    python anime_pipeline.py --watch
 """
 
 import argparse
@@ -3109,8 +3109,8 @@ def delete_originals(successes: list[Path],
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description=(
-            "Unified anime pipeline: Nyaa → qBittorrent → HandBrake hard-sub burner.\n"
-            "Auto-discovers Jellyfin Anime directory, downloads, monitors, then encodes."
+            "Unified anime pipeline: Nyaa -> qBittorrent -> Jellyfin.\n"
+            "Auto-discovers Jellyfin Anime directory, downloads, monitors, then rescans."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
@@ -3118,8 +3118,7 @@ Examples:
   python anime_pipeline.py
   python anime_pipeline.py --pick-group --season 2
   python anime_pipeline.py --no-confirm --dry-run
-  python anime_pipeline.py --delete-originals --cleanup-files
-  python anime_pipeline.py --preset "H.265 MKV 1080p30" --fallback-by-language
+  python anime_pipeline.py --cleanup-files
 """,
     )
     # ── Fetcher flags ───────────────────────────────────────────────────────
@@ -3136,54 +3135,18 @@ Examples:
     p.add_argument("--cleanup-files", action="store_true",
                    help=(
                        "WARNING: tells qBittorrent to DELETE downloaded files from disk "
-                       "as soon as the torrent finishes — BEFORE encoding. "
-                       "Only use this if you are skipping the encode step (--skip-encode) "
-                       "and want qBittorrent to clean up its own data directory. "
-                       "Do NOT use this in a normal encode run — the source files will be "
-                       "gone before HandBrake sees them. "
-                       "Post-encode cleanup of source files is handled automatically "
-                       "by the pipeline (use --keep-originals to suppress it)."
+                       "as soon as the torrent finishes. "
+                       "Use this only if your qBittorrent path is temporary and you do "
+                       "not want completed media files to remain on disk."
                    ))
 
-    # ── HandBrake flags ─────────────────────────────────────────────────────
-    p.add_argument("--preset",       default=HB_DEFAULT_PRESET,
-                   help=f"HandBrake preset (default: {HB_DEFAULT_PRESET!r})")
-    p.add_argument("--force",        action="store_true",
-                   help="Overwrite existing *.hs output files")
+    # -- Pipeline flags ---------------------------------------------------------
     p.add_argument("--dry-run",      action="store_true",
-                   help="Preview HandBrake commands without encoding")
-    p.add_argument("--fallback-by-language", action="store_true",
-                   help="Re-auto-select per file if chosen track index is absent")
-    p.add_argument("--allow-crop",   action="store_true",
-                   help="Allow HandBrake to crop (default: crop=none)")
-    p.add_argument("--keep-originals", action="store_true",
-                   help=(
-                       "Keep original source files after encoding. "
-                       "By default originals are deleted once all encodes succeed."
-                   ))
-    p.add_argument("--hb",           default=None,
-                   help="Path to HandBrakeCLI (auto-detected if omitted)")
-    p.add_argument("--skip-encode",  action="store_true",
-                   help="Download and monitor only — skip HandBrake encoding step")
-    p.add_argument("--engine",       choices=["handbrake", "ffmpeg-nvenc"],
-                   default="handbrake",
-                   help=(
-                       "Encoding engine to use.  'handbrake' (default) uses HandBrakeCLI. "
-                       "'ffmpeg-nvenc' uses the FFmpeg NVENC hybrid filterchain: the GPU "
-                       "decodes via CUVID, subtitles are burned on the CPU once, then "
-                       "hwupload_cuda moves the frame to VRAM for h264_nvenc encoding. "
-                       "Requires an NVIDIA GPU with NVENC support and a recent FFmpeg build."
-                   ))
-    p.add_argument("--dual-output",  action="store_true",
-                   help=(
-                       "FFmpeg-NVENC mode only: produce both a 1080p and 720p output in a "
-                       "single pass by using split=2 in the filtergraph. The expensive CPU "
-                       "subtitle render happens exactly once."
-                   ))
+                   help="Preview download/routing actions without changing files")
     p.add_argument("--setup-jellyfin", action="store_true",
                    help="Run one-time Jellyfin URL + API key setup, then exit")
     p.add_argument("--watch",          action="store_true",
-                   help="Poll RSS for all active watch list entries and encode new episodes")
+                   help="Poll RSS for all active watch list entries and download new episodes")
     p.add_argument("--watch-status",   action="store_true",
                    help="Print the current watch list and exit")
     p.add_argument("--fun", dest="fun", action="store_true", default=True,
@@ -3213,15 +3176,14 @@ def run_one_season(
     args:             argparse.Namespace,
     jellyfin_anime_dir: Path,
     client:           "qbittorrentapi.Client",
-    hb:               str,
     delete_files:     bool,
     auto_confirm:     bool = False,
 ) -> bool:
     """
     Execute the full pipeline for a single season:
-      group selection → episode filter → qBit add → monitor → encode → cleanup.
+      group selection -> episode filter -> qBit add -> monitor -> routing.
 
-    Returns True if the season completed without encode failures, False otherwise.
+    Returns True if the season completed without download/routing failures, False otherwise.
     """
     season_label = f"Season {season}"
 
@@ -3835,134 +3797,8 @@ def run_one_season(
         if _reclassed:
             print(f"  {c(C.CYAN_DIM, str(_reclassed))} file(s) reclassified to Season 00")
 
-    if args.skip_encode:
-        return True
-
-    print(f"\n{SEP_THICK}")
-    print(b_white(f"PHASE 3 — Encoding {season_label}"))
-    print(SEP_THICK)
-
-    encode_root = Path(save_path)
-    if not encode_root.is_dir():
-        print(red(f"[ERROR] Season directory not found: {encode_root}"))
-        return False
-
-    all_files = collect_video_files(encode_root)
-    if not all_files:
-        print(yellow(f"[INFO] No video files in {encode_root}. Nothing to encode."))
-        return True
-
-    print(f"{cyan('[INFO]')} Found {amber(str(len(all_files)))} file(s) "
-          f"under {white(str(encode_root))}")
-
-    wait_for_files_stable(all_files)
-
-    chosen_sub, chosen_aud = scan_and_autoselect(hb, all_files[0])
-
-    print(f"\n{SEP_THICK}")
-    print(b_white(f"ENCODE PLAN — {season_label}"))
-    print(SEP_THICK)
-    def row(label: str, value: str) -> None:
-        print(f"  {dim((label + ' :').ljust(22))} {amber(value)}")
-    row("Files to encode",   str(len(all_files)))
-    row("Source directory",  str(encode_root))
-    row("Preset",            args.preset)
-    row("Output suffix",     HS_MARKER + ".mkv/.mp4")
-    if chosen_sub:
-        title_p = f'  "{chosen_sub["title"]}"' if chosen_sub.get("title") else ""
-        row("Burn subtitle",
-            f"track {chosen_sub['index']} – {chosen_sub['language']} "
-            f"({chosen_sub['format']}){title_p}")
-    else:
-        row("Burn subtitle", "none (no EN dialogue track found)")
-    if chosen_aud:
-        ch = f" {chosen_aud['channels']}" if chosen_aud.get("channels") else ""
-        row("Audio track",
-            f"track {chosen_aud['index']} – {chosen_aud['language']} "
-            f"({chosen_aud['codec']}{ch})")
-    else:
-        row("Audio track", "default (HandBrake decides)")
-    row("Crop mode",      "allow" if args.allow_crop else "none (safe)")
-    row("Dry run",        str(args.dry_run))
-    row("Force overwrite", str(args.force))
-    print(SEP_THICK)
-
-    successes: list[Path] = []
-    failures:  list[Path] = []
-    skipped:   list[Path] = []
-
-    engine = getattr(args, "engine", "handbrake")
-
-    if engine == "ffmpeg-nvenc":
-        print(f"\n{SEP_THIN}")
-        print(f"{cyan('[ENGINE]')} {amber('FFmpeg NVENC hybrid filterchain')}")
-        if getattr(args, "dual_output", False):
-            print(f"  {dim('Dual output: 1080p + 720p in a single pass (split=2 filtergraph)')}")
-        process_files_ffmpeg(
-            all_files, chosen_sub, chosen_aud,
-            force=args.force, dry_run=args.dry_run,
-            dual_output=getattr(args, "dual_output", False),
-            successes=successes, failures=failures, skipped=skipped,
-        )
-    else:
-        process_files(
-            all_files, hb, chosen_sub, chosen_aud,
-            args.preset, args.force, args.dry_run,
-            args.allow_crop, args.fallback_by_language,
-            successes, failures, skipped,
-        )
-
-    print(f"\n{SEP_THICK}")
-    print(b_white(f"ENCODE SUMMARY — {season_label}"))
-    print(SEP_THICK)
-    print(f"  {status_badge('ok')} Succeeded : {green(str(len(successes)))}")
-    print(f"  {status_badge('skip')} Skipped   : {yellow(str(len(skipped)))}")
-    print(f"  {status_badge('fail')} Failed    : {red(str(len(failures)))}")
-    if failures:
-        print(f"\n{red('Failed files:')}")
-        for f in failures:
-            print(f"  {dim('–')} {red(str(f))}")
-
-    # ── Delete originals ──────────────────────────────────────────────────────
-    if args.keep_originals:
-        print(f"\n{yellow('[CLEANUP SKIPPED]')} --keep-originals set.")
-    elif failures:
-        print(f"\n{yellow('[CLEANUP SKIPPED]')} {len(failures)} encode(s) failed — "
-              f"originals {white('NOT')} deleted.")
-    elif successes:
-        deleted, del_errors = delete_originals(successes, dry_run=args.dry_run)
-        print(f"\n  {green('Deleted')}  : {green(str(len(deleted)))}")
-        if del_errors:
-            print(f"  {red('Del errors')}: {red(str(len(del_errors)))}")
-            for f in del_errors:
-                print(f"  {dim('–')} {red(str(f))}")
-
-        # ── Staging directory final cleanup ───────────────────────────────────
-        # After a batch encode+delete cycle, _batch_staging/ should already be
-        # empty (all files were moved out during routing).  Do a final sweep
-        # to remove it and any empty subdirectories left behind by qBittorrent.
-        # Only runs if all encodes AND all deletions succeeded — no partial cleanup.
-        if _using_batch and not del_errors and not args.dry_run:
-            _stg = Path(build_save_path(jellyfin_anime_dir, anime_name, season)).parent / "_batch_staging"
-            if _stg.is_dir():
-                try:
-                    # Remove any empty subdirectories first (torrent folder structure)
-                    for _sub in sorted(_stg.rglob("*"), reverse=True):
-                        if _sub.is_dir():
-                            try:
-                                _sub.rmdir()
-                            except OSError:
-                                pass
-                    _stg.rmdir()
-                    print(f"  {c(C.DIM, 'Staging directory removed.')}")
-                    log.info("Removed batch staging dir after clean encode: %s", _stg)
-                except OSError:
-                    # Not empty — leftover files exist, leave them and warn
-                    _remaining = list(_stg.rglob("*"))
-                    if _remaining:
-                        print(f"  {yellow('[WARN]')} Staging dir not empty after cleanup "
-                              f"({len(_remaining)} item(s)) — inspect manually: {_stg}")
-
+    # Encoding/transcoding phase removed: files go directly from qBittorrent to Jellyfin.
+    # Continue with watch list update + Jellyfin rescan only.
     # ── Update watch list ─────────────────────────────────────────────────────
     # Re-query AniList to get current airing status for this season.
     # Uses the same data already fetched during verify_episode_coverage but
@@ -3989,14 +3825,13 @@ def run_one_season(
 
     # ── Jellyfin library rescan ───────────────────────────────────────────────
     print()
-    trigger_jellyfin_rescan(season_label)
 
     VISUAL_STATS["seasons"] += 1
-    VISUAL_STATS["encoded_ok"] += len(successes)
-    VISUAL_STATS["encoded_skip"] += len(skipped)
-    VISUAL_STATS["encoded_fail"] += len(failures)
+    VISUAL_STATS["encoded_ok"] += 0
+    VISUAL_STATS["encoded_skip"] += 0
+    VISUAL_STATS["encoded_fail"] += 0
 
-    return len(failures) == 0
+    return True
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -4410,7 +4245,7 @@ def poll_rss_for_entry(entry: dict) -> list[dict]:
 def run_watch_mode(args: argparse.Namespace, anime_dir: Path) -> None:
     """
     --watch mode: poll RSS for all active watch list entries,
-    download new episodes, encode, update last_episode.
+    download new episodes, route to media path, update last_episode.
     """
     entries = load_watchlist(anime_dir)
     active  = [e for e in entries if not e.get("completed")]
@@ -4426,8 +4261,6 @@ def run_watch_mode(args: argparse.Namespace, anime_dir: Path) -> None:
     print(f"  {c(C.LABEL, 'Entries to check:')} {c(C.VALUE2, str(len(active)))}")
     print(f"  {c(C.LABEL, 'Watch list:')} {c(C.VALUE, str(watchlist_path(anime_dir)))}")
 
-    hb = find_handbrake(args.hb)
-    print(f"  {c(C.DIM, 'HandBrakeCLI:')} {amber(hb)}")
 
     try:
         client = connect_qbit()
@@ -4551,33 +4384,7 @@ def run_watch_mode(args: argparse.Namespace, anime_dir: Path) -> None:
             pass
         monitor.stop()
 
-        # Encode new episodes only
         season_label = f"{entry['anime_name']} Season {entry['season']}"
-        encode_root  = Path(save_path)
-        all_files    = collect_video_files(encode_root)
-        # Only encode files whose episode number is in the new batch
-        new_ep_nums  = {ep["episode_num"] for ep in new_eps}
-        files_to_enc = [f for f in all_files
-                        if extract_episode_number(f.name) in new_ep_nums
-                        and HS_MARKER not in f.name]
-
-        if not files_to_enc:
-            print(f"  {yellow('[WARN]')} No new video files found to encode.")
-            continue
-
-        wait_for_files_stable(files_to_enc)
-        chosen_sub, chosen_aud = scan_and_autoselect(hb, files_to_enc[0])
-
-        successes: list[Path] = []
-        failures:  list[Path] = []
-        skipped:   list[Path] = []
-        process_files(files_to_enc, hb, chosen_sub, chosen_aud,
-                      args.preset, args.force, args.dry_run,
-                      args.allow_crop, args.fallback_by_language,
-                      successes, failures, skipped)
-
-        if successes and not failures and not args.keep_originals:
-            delete_originals(successes, dry_run=args.dry_run)
 
         # Update last_episode in watch list
         highest_new = max(ep["episode_num"] for ep in new_eps)
@@ -4768,7 +4575,7 @@ def setup_jellyfin_config() -> None:
     cfg = {"url": url, "api_key": api_key, "skip": False}
     _JELLY_CONFIG_FILE.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
     print(f"  {c(C.SUCCESS, '✓')} Saved to {c(C.VALUE, _JELLY_CONFIG_FILE.name)}")
-    print(f"  {c(C.DIM, 'Jellyfin rescan will now run automatically after each encode.')}")
+    print(f"  {c(C.DIM, 'Jellyfin rescan will now run automatically after each completed download batch.')}")
 
 
 def trigger_jellyfin_rescan(season_label: str) -> None:
@@ -4916,7 +4723,7 @@ def main() -> None:
 
     # ── Banner ────────────────────────────────────────────────────────────────
     width     = 64
-    title_str = "Anime Pipeline  |  Nyaa → qBittorrent → HandBrake"
+    title_str = "Anime Pipeline  |  Nyaa -> qBittorrent -> Jellyfin"
     pad       = (width - len(title_str)) // 2
     print(c(C.AMBER, "═" * width))
     print(c(C.AMBER, "║") +
@@ -4992,28 +4799,12 @@ def main() -> None:
 
     delete_files = args.cleanup_files
 
-    # Safety check: --cleanup-files tells qBittorrent to delete downloaded
-    # files from disk the moment a torrent finishes — before HandBrake runs.
-    # That would leave HandBrake with nothing to encode.  Warn loudly and
-    # require explicit confirmation if encoding is not being skipped.
-    if delete_files and not getattr(args, "skip_encode", False):
+    # Safety check: --cleanup-files removes completed files from disk.
+    # Keep it off unless you intentionally want ephemeral downloads.
+    if delete_files:
         print()
-        print(red("┌─────────────────────────────────────────────────────────────┐"))
-        print(red("│  WARNING: --cleanup-files is set but --skip-encode is NOT.  │"))
-        print(red("│  qBittorrent will DELETE your downloaded files immediately  │"))
-        print(red("│  after each torrent finishes — BEFORE HandBrake encodes.   │"))
-        print(red("│  HandBrake will find an empty directory and fail.           │"))
-        print(red("│                                                             │"))
-        print(red("│  The pipeline deletes source files automatically AFTER     │"))
-        print(red("│  encoding succeeds.  You do not need --cleanup-files.      │"))
-        print(red("└─────────────────────────────────────────────────────────────┘"))
-        print()
-        _confirm = input(
-            f"{yellow('Type YES to continue anyway, or press Enter to abort: ')}"
-        ).strip()
-        if _confirm != "YES":
-            sys.exit(red("[ABORTED] Remove --cleanup-files and re-run."))
-
+        print(yellow("[WARN] --cleanup-files is enabled; completed media files will be removed by qBittorrent."))
+        print(yellow("[WARN] Disable this unless your qBittorrent path is temporary."))
 
     # ── Broad nyaa search ────────────────────────────────────────────────────
     print()
@@ -5113,7 +4904,7 @@ def main() -> None:
         desc = ", ".join(f"Season {s}" for s in seasons_to_run)
         print(f"  {c(C.INFO, 'Running:')} {c(C.VALUE2, desc)}")
 
-    # ── Connect qBittorrent + find HandBrakeCLI once for all seasons ──────────
+    # Connect qBittorrent once for all seasons
     print()
     divider("qBittorrent")
     print(f"  {c(C.LABEL, 'Connecting ...')}")
@@ -5124,15 +4915,13 @@ def main() -> None:
         sys.exit(0)
     signal.signal(signal.SIGINT, _on_sigint)
 
-    hb = find_handbrake(args.hb)
-    print(f"{cyan('[INFO]')} {dim('HandBrakeCLI:')} {amber(hb)}")
 
     # ── Season loop ───────────────────────────────────────────────────────────
     any_failure = False
     for season in seasons_to_run:
         ok = run_one_season(
             season, raw, ranked, anime_name, args,
-            jellyfin_anime_dir, client, hb, delete_files,
+            jellyfin_anime_dir, client, delete_files,
             auto_confirm=all_seasons_mode,
         )
         if not ok:
