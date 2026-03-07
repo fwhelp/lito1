@@ -3186,8 +3186,10 @@ Examples:
                    help="Poll RSS for all active watch list entries and encode new episodes")
     p.add_argument("--watch-status",   action="store_true",
                    help="Print the current watch list and exit")
-    p.add_argument("--fun", action="store_true",
-                   help="Enable optional fun visual output/easter eggs (cosmetic only)")
+    p.add_argument("--fun", dest="fun", action="store_true", default=True,
+                   help="Enable fun visual output/easter eggs (default: on; cosmetic only)")
+    p.add_argument("--no-fun", dest="fun", action="store_false",
+                   help="Disable fun visual output/easter eggs")
     p.add_argument("--theme", choices=["clean", "retro", "neon", "minimal"],
                    default="clean",
                    help="Visual output theme (cosmetic only)")
