@@ -1089,20 +1089,33 @@ def post_process_batch_download(
           f"{c(C.CYAN_DIM, str(sp_n))} special/OVA  "
           f"{c(C.WARN if sk_n else C.DIM, str(sk_n) + ' skipped')}")
 
-    # Remove the staging directory itself once it's empty.
-    if not dry_run:
+    # Remove empty staging subdirs recursively. Keep only if leftovers remain.
+    if not dry_run and download_dir.is_dir():
+        for _sub in sorted(download_dir.rglob("*"), reverse=True):
+            if _sub.is_dir():
+                try:
+                    _sub.rmdir()
+                except OSError:
+                    pass
         try:
             download_dir.rmdir()
             log.info("Removed empty batch staging dir: %s", download_dir)
             print(f"  {c(C.DIM, 'Staging directory removed.')}")
+            _parent = download_dir.parent
+            if _parent.name == "_batch_staging":
+                try:
+                    _parent.rmdir()
+                    log.info("Removed empty staging parent dir: %s", _parent)
+                except OSError:
+                    pass
         except OSError:
-            remaining = list(download_dir.iterdir()) if download_dir.is_dir() else []
+            remaining = list(download_dir.iterdir())
             if remaining:
                 print(f"  {c(C.WARN, '[WARN]')} {c(C.DIM, str(len(remaining)))} "
-                      f"{c(C.DIM, 'file(s) remain in staging (were not routed) — directory kept:')}")
+                      f"{c(C.DIM, 'item(s) remain in staging (were not routed) - directory kept:')}")
                 print(f"  {c(C.DIM, str(download_dir))}")
                 for leftover in sorted(remaining):
-                    print(f"    {c(C.DIM, '–')} {c(C.MUTED, leftover.name)}")
+                    print(f"    {c(C.DIM, '-')} {c(C.MUTED, leftover.name)}")
             log.debug("batch staging rmdir skipped: %s", download_dir)
 
     return moved
@@ -1947,6 +1960,15 @@ def normalize_series_filenames_for_jellyfin(series_dir: Path, dry_run: bool = Fa
 
         for src in files:
             ep_num = extract_episode_number(src.name)
+            if ep_num is None:
+                # Parser fallback for scene/fansub naming styles that still include SxxEyy.
+                m_se = re.search(rf"S{season_num:02d}E(\d{1,3})", src.stem, re.IGNORECASE)
+                if m_se:
+                    ep_num = int(m_se.group(1))
+                else:
+                    m_e = re.search(r"\bE(?:P)?(\d{1,3})\b", src.stem, re.IGNORECASE)
+                    if m_e:
+                        ep_num = int(m_e.group(1))
             if ep_num is None:
                 if season_num == 0:
                     ep_num = next_special
@@ -3570,7 +3592,7 @@ def run_one_season(
     # ─────────────────────────────────────────────────────────────────────────
     if _using_batch and _batch_torrent:
         series_dir    = Path(build_save_path(jellyfin_anime_dir, anime_name, season)).parent
-        batch_staging = series_dir / "_batch_staging"
+        batch_staging = series_dir / "_batch_staging" / f"Season {(season or 1):02d}"
         season_tv_dir = series_dir / f"Season {(season or 1):02d}"
 
         # ── Integrity check helpers ────────────────────────────────────────────
