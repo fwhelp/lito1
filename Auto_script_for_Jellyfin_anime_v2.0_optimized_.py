@@ -33,6 +33,7 @@ import json
 import logging
 import logging.config
 import os
+import random
 import re
 import shutil
 import signal
@@ -155,6 +156,22 @@ WINDOWS_HB_PATHS = [
     r"C:\Program Files (x86)\HandBrake\HandBrakeCLI.exe",
 ]
 
+# Common Linux install paths + command names:
+# - distro packages (Debian/Ubuntu/Arch/etc.): /usr/bin/HandBrakeCLI
+# - local/source installs: /usr/local/bin/HandBrakeCLI
+# - Flatpak exports can expose fr.handbrake.HandBrakeCLI on PATH.
+LINUX_HB_PATHS = [
+    "/usr/bin/HandBrakeCLI",
+    "/usr/local/bin/HandBrakeCLI",
+    "/app/bin/HandBrakeCLI",
+]
+
+LINUX_HB_COMMANDS = [
+    "HandBrakeCLI",
+    "handbrakecli",
+    "fr.handbrake.HandBrakeCLI",
+]
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # COLOR SYSTEM
@@ -275,6 +292,98 @@ def rainbow_next(text: str) -> str:
 SEP_THIN  = dim("─" * 64)
 SEP_THICK = dim("═" * 64)
 SEP_HASH  = dim("▓" * 64)
+
+SEP_THIN_DEFAULT  = SEP_THIN
+SEP_THICK_DEFAULT = SEP_THICK
+SEP_HASH_DEFAULT  = SEP_HASH
+
+VISUAL_FUN = False
+VISUAL_THEME = "clean"
+PIPELINE_START_TS = time.time()
+VISUAL_STATS = {
+    "seasons": 0,
+    "encoded_ok": 0,
+    "encoded_skip": 0,
+    "encoded_fail": 0,
+}
+
+FUN_ORACLE_LINES = [
+    "Fansub oracle: trust seeders, but verify subtitles.",
+    "Pipeline mood: caffeinated and subtitle-positive.",
+    "Nyaa winds are favorable today.",
+    "Codec spirits approve this batch.",
+]
+
+MILESTONE_LINES = [
+    "Combo unlocked: {n} successful encodes.",
+    "Batch streak: {n} files cleared.",
+    "Achievement: {n} episodes processed cleanly.",
+]
+
+
+def apply_visual_theme(theme: str) -> None:
+    """Apply optional output-only separator styling."""
+    global SEP_THIN, SEP_THICK, SEP_HASH
+    if theme == "minimal":
+        SEP_THIN = "-" * 64
+        SEP_THICK = "=" * 64
+        SEP_HASH = "#" * 64
+    elif theme == "retro":
+        SEP_THIN = dim("." * 64)
+        SEP_THICK = dim("=" * 64)
+        SEP_HASH = dim("#" * 64)
+    elif theme == "neon":
+        SEP_THIN = SEP_THIN_DEFAULT
+        SEP_THICK = SEP_THICK_DEFAULT
+        SEP_HASH = SEP_HASH_DEFAULT
+    else:
+        SEP_THIN = SEP_THIN_DEFAULT
+        SEP_THICK = SEP_THICK_DEFAULT
+        SEP_HASH = SEP_HASH_DEFAULT
+
+
+def status_badge(kind: str) -> str:
+    k = kind.lower()
+    if k == "ok":
+        return green("[OK]")
+    if k == "skip":
+        return yellow("[SKIP]")
+    if k == "fail":
+        return red("[FAIL]")
+    if k == "retry":
+        return magenta("[RETRY]")
+    return white(f"[{kind.upper()}]")
+
+
+def _maybe_print_milestone(success_count: int) -> None:
+    if not VISUAL_FUN:
+        return
+    if success_count > 0 and success_count % 5 == 0:
+        line = random.choice(MILESTONE_LINES).format(n=success_count)
+        print(f"  {status_badge('ok')} {magenta(line)}")
+
+
+def _format_duration(seconds: float) -> str:
+    total = int(max(0, seconds))
+    h = total // 3600
+    m = (total % 3600) // 60
+    s = total % 60
+    return f"{h:02d}:{m:02d}:{s:02d}"
+
+
+def print_visual_footer(any_failure: bool) -> None:
+    elapsed = _format_duration(time.time() - PIPELINE_START_TS)
+    print(f"\n{SEP_THICK}")
+    print(b_white("RUN FOOTER"))
+    print(SEP_THICK)
+    print(f"  Runtime        : {cyan(elapsed)}")
+    print(f"  Seasons        : {amber(str(VISUAL_STATS['seasons']))}")
+    print(f"  Encoded OK     : {green(str(VISUAL_STATS['encoded_ok']))}")
+    print(f"  Encoded Skipped: {yellow(str(VISUAL_STATS['encoded_skip']))}")
+    print(f"  Encoded Failed : {red(str(VISUAL_STATS['encoded_fail']))}")
+    print(f"  Final status   : {status_badge('fail' if any_failure else 'ok')}")
+    if VISUAL_FUN:
+        print(f"  {dim(random.choice(FUN_ORACLE_LINES))}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1976,12 +2085,20 @@ def find_handbrake(override: str | None = None) -> str:
         for p in WINDOWS_HB_PATHS:
             if Path(p).exists():
                 return p
-    found = shutil.which("HandBrakeCLI")
+    if sys.platform.startswith("linux"):
+        for p in LINUX_HB_PATHS:
+            if Path(p).exists():
+                return p
+        for exe in LINUX_HB_COMMANDS:
+            found = shutil.which(exe)
+            if found:
+                return found
+    found = shutil.which("HandBrakeCLI") or shutil.which("handbrakecli")
     if found:
         return found
     sys.exit(red(
         "[ERROR] HandBrakeCLI not found. "
-        "Install HandBrake or pass --hb /path/to/HandBrakeCLI"
+        "Install HandBrakeCLI (or Flatpak HandBrake with exported CLI) or pass --hb /path/to/HandBrakeCLI"
     ))
 
 
@@ -2767,6 +2884,7 @@ def run_ffmpeg_nvenc_hardsub(
             size_mb = p.stat().st_size // 1_048_576
             print(green(f"  [OK] {p.name}  ({size_mb} MB)"))
             successes.append(video)
+            _maybe_print_milestone(len(successes))
             log.info("FFmpeg encode OK: %s (%d MB)", p.name, size_mb)
         else:
             sz = p.stat().st_size if p.exists() else 0
@@ -2804,6 +2922,7 @@ def process_files_ffmpeg(
             dry_run=dry_run, force=force, dual_output=dual_output,
         )
         successes.extend(s)
+        _maybe_print_milestone(len(successes))
         failures.extend(f)
 
 
@@ -2928,6 +3047,7 @@ def process_files(files: list[Path], hb: str,
                 print(green(f"  [OK] Encoded successfully.  "
                             f"({out_size // 1_048_576} MB)"))
                 successes.append(video)
+                _maybe_print_milestone(len(successes))
         else:
             print(red(f"  [FAIL] HandBrakeCLI exited with code {rc}."))
             failures.append(video)
@@ -3066,6 +3186,11 @@ Examples:
                    help="Poll RSS for all active watch list entries and encode new episodes")
     p.add_argument("--watch-status",   action="store_true",
                    help="Print the current watch list and exit")
+    p.add_argument("--fun", action="store_true",
+                   help="Enable optional fun visual output/easter eggs (cosmetic only)")
+    p.add_argument("--theme", choices=["clean", "retro", "neon", "minimal"],
+                   default="clean",
+                   help="Visual output theme (cosmetic only)")
 
     return p.parse_args()
 
@@ -3788,9 +3913,9 @@ def run_one_season(
     print(f"\n{SEP_THICK}")
     print(b_white(f"ENCODE SUMMARY — {season_label}"))
     print(SEP_THICK)
-    print(f"  {green('Succeeded')} : {green(str(len(successes)))}")
-    print(f"  {yellow('Skipped')}   : {yellow(str(len(skipped)))}")
-    print(f"  {red('Failed')}    : {red(str(len(failures)))}")
+    print(f"  {status_badge('ok')} Succeeded : {green(str(len(successes)))}")
+    print(f"  {status_badge('skip')} Skipped   : {yellow(str(len(skipped)))}")
+    print(f"  {status_badge('fail')} Failed    : {red(str(len(failures)))}")
     if failures:
         print(f"\n{red('Failed files:')}")
         for f in failures:
@@ -3863,6 +3988,11 @@ def run_one_season(
     # ── Jellyfin library rescan ───────────────────────────────────────────────
     print()
     trigger_jellyfin_rescan(season_label)
+
+    VISUAL_STATS["seasons"] += 1
+    VISUAL_STATS["encoded_ok"] += len(successes)
+    VISUAL_STATS["encoded_skip"] += len(skipped)
+    VISUAL_STATS["encoded_fail"] += len(failures)
 
     return len(failures) == 0
 
@@ -4759,6 +4889,10 @@ def trigger_jellyfin_rescan(season_label: str) -> None:
 
 def main() -> None:
     args = parse_args()
+    global VISUAL_FUN, VISUAL_THEME
+    VISUAL_FUN = getattr(args, "fun", False)
+    VISUAL_THEME = getattr(args, "theme", "clean")
+    apply_visual_theme(VISUAL_THEME)
 
     # ── Jellyfin setup mode ───────────────────────────────────────────────────
     if args.setup_jellyfin:
@@ -4788,6 +4922,9 @@ def main() -> None:
             " " * (width - pad - len(title_str) - 2)) +
           c(C.AMBER, "║"))
     print(c(C.AMBER, "═" * width))
+    if VISUAL_FUN:
+        print(f"  {magenta('[FUN]')} {dim(random.choice(FUN_ORACLE_LINES))}")
+    print(f"  {dim('Theme:')} {amber(VISUAL_THEME)}")
 
     if not _ANITOPY_AVAILABLE:
         print(f"\n  {yellow('[WARN]')} anitopy not installed — using regex fallback for title parsing.")
@@ -5022,6 +5159,7 @@ def main() -> None:
         print(c(C.SUCCESS, " " * 25 + "All done."))
     print(c(C.AMBER, "═" * 64))
     print()
+    print_visual_footer(any_failure)
     sys.exit(1 if any_failure else 0)
 
 
