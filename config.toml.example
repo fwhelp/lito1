@@ -1,0 +1,27 @@
+# anime_pipeline — configuration file
+# Copy this file to config.toml and edit to taste.
+# NEVER put passwords here — use the QBIT_PASS / JELLYFIN_API_KEY env vars.
+
+[qbittorrent]
+host     = "localhost"
+port     = 8080
+user     = "admin"
+category = "anime"
+
+[nyaa]
+base_url         = "https://nyaa.si"
+default_pages    = 15
+monitor_interval = 30   # seconds between completion-check polls
+
+[groups]
+preferred = [
+    "erai-raws", "subsplease", "horriblesubs", "judas",
+    "ember", "yameii", "psa", "akihito", "commie",
+]
+quality_tolerance = 0.15
+
+[handbrake]
+default_preset = "General/Fast 1080p30"
+
+[pipeline]
+hs_marker = ".hs"

@@ -1,0 +1,16 @@
+﻿# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local runtime artifacts
+anime_pipeline.log
+anime_pipeline_jellyfin.json
+anime_watchlist.json
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
