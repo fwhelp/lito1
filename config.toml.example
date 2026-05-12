@@ -1,4 +1,4 @@
-# anime_pipeline — configuration file
+# lito1 configuration file
 # Copy this file to config.toml and edit to taste.
 # NEVER put passwords here — use the QBIT_PASS / JELLYFIN_API_KEY env vars.
 

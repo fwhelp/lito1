@@ -427,13 +427,13 @@ def finish_run(any_failure: bool = False, exit_code: int | None = None) -> None:
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # STRUCTURED LOGGING â€” logging.config.dictConfig
 #
-# All internal log records go to anime_pipeline.log (JSON lines) AND to
+# All internal log records go to lito1.log (JSON lines) AND to
 # stderr at WARNING+.  Print/colour output is kept for the interactive UI.
 # disable_existing_loggers is explicitly False so qbittorrentapi / requests
 # library logs propagate normally to the root logger.
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-_LOG_FILE = Path(__file__).with_name("anime_pipeline.log")
+_LOG_FILE = Path(__file__).with_name("lito1.log")
 
 logging.config.dictConfig({
     "version":                 1,
@@ -470,7 +470,7 @@ logging.config.dictConfig({
     },
 })
 
-log = logging.getLogger("anime_pipeline")
+log = logging.getLogger("lito1")
 
 
 def divider(title: str = "") -> None:
@@ -4946,12 +4946,12 @@ def run_watch_mode(args: argparse.Namespace, anime_dir: Path) -> None:
 # Jellyfin library rescan
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-_JELLY_CONFIG_FILE = Path(__file__).with_name("anime_pipeline_jellyfin.json")
+_JELLY_CONFIG_FILE = Path(__file__).with_name("lito1_jellyfin.json")
 
 
 def load_jellyfin_config() -> dict | None:
     """
-    Load Jellyfin connection details from anime_pipeline_jellyfin.json.
+    Load Jellyfin connection details from lito1_jellyfin.json.
 
     Returns a config dict if the file exists and contains a valid URL + API key.
     Returns None silently in all other cases â€” missing file, opted-out, malformed.

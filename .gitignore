@@ -5,8 +5,8 @@ __pycache__/
 *.pyd
 
 # Local runtime artifacts
-anime_pipeline.log
-anime_pipeline_jellyfin.json
+lito1.log
+lito1_jellyfin.json
 anime_watchlist.json
 
 # OS/editor
