@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lito1"
-version = "2.0.0"
-description = "Nyaa -> qBittorrent -> Jellyfin anime pipeline automation"
+version = "2.1.0"
+description = "Nyaa -> qBittorrent -> Jellyfin automation for anime libraries"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [project.scripts]
-anime = "lito1.cli:main"
+lito1 = "lito1.cli:main"
 
 [tool.setuptools]
 packages = ["lito1"]

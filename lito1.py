@@ -5073,7 +5073,7 @@ def show_jellyfin_startup_status(prompt_on_failure: bool = True) -> None:
             finish_run(any_failure=False, exit_code=0)
         return
 
-    print(f"  {c(C.DIM, 'Jellyfin: not configured  (run: anime --setup-jellyfin)')}")
+    print(f"  {c(C.DIM, 'Jellyfin: not configured  (run: lito1 --setup-jellyfin)')}")
 
 
 def setup_jellyfin_config() -> None:
@@ -5341,7 +5341,7 @@ def main() -> None:
                 print(f"  {c(C.DIM, 'Aborted. Fix Jellyfin connectivity and re-run.')}")
                 finish_run(any_failure=False, exit_code=0)
     else:
-        print(f"  {c(C.DIM, 'Jellyfin: not configured  (run: anime --setup-jellyfin)')}")
+        print(f"  {c(C.DIM, 'Jellyfin: not configured  (run: lito1 --setup-jellyfin)')}")
 
     # Auto-rebuild watch list from disk if it doesn't exist or is empty
     if not watchlist_path(jellyfin_anime_dir).exists() or not load_watchlist(jellyfin_anime_dir):
