@@ -1,4 +1,4 @@
-﻿"""Loader for the original monolithic implementation.
+"""Loader for the original monolithic implementation.
 
 This keeps behavior stable while modules are split incrementally.
 """
@@ -10,7 +10,7 @@ from functools import lru_cache
 from pathlib import Path
 from types import ModuleType
 
-LEGACY_FILENAME = "Auto_script_for_Jellyfin_anime_v2.0_optimized_.py"
+LEGACY_FILENAME = "lito1.py"
 
 
 @lru_cache(maxsize=1)
@@ -20,7 +20,7 @@ def legacy_module() -> ModuleType:
     if not legacy_path.exists():
         raise FileNotFoundError(f"Legacy script not found: {legacy_path}")
 
-    spec = importlib.util.spec_from_file_location("anime_pipeline_legacy", legacy_path)
+    spec = importlib.util.spec_from_file_location("lito1_legacy", legacy_path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"Could not load module spec from {legacy_path}")
 

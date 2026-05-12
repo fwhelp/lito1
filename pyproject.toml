@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "anime-pipeline-jellyfin"
+name = "lito1"
 version = "2.0.0"
-description = "Nyaa -> qBittorrent -> HandBrake/FFmpeg anime pipeline with Jellyfin integration"
+description = "Nyaa -> qBittorrent -> Jellyfin anime pipeline automation"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -18,7 +18,8 @@ dependencies = [
 ]
 
 [project.scripts]
-anime = "anime_pipeline.cli:main"
+anime = "lito1.cli:main"
 
 [tool.setuptools]
-packages = ["anime_pipeline"]
+packages = ["lito1"]
+
