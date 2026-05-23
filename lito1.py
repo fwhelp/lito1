@@ -14,7 +14,7 @@ Requirements:
     pip install requests beautifulsoup4 qbittorrent-api anitopy guessit
 
 Configuration:
-    Copy config.toml.example â†’ config.toml and edit to taste.
+    Copy config.toml.example -> config.toml and edit to taste.
     Sensitive credentials (qBittorrent password, Jellyfin API key) can be
     supplied via environment variables QBIT_PASS and JELLYFIN_API_KEY to keep
     them out of plain-text config files.
@@ -48,7 +48,7 @@ import requests
 from bs4 import BeautifulSoup
 import qbittorrentapi
 
-# â”€â”€ Python 3.11+ has tomllib in stdlib; fall back to tomli on older versions â”€â”€
+# -- Python 3.11+ has tomllib in stdlib; fall back to tomli on older versions --
 try:
     import tomllib  # type: ignore[import]
 except ImportError:
@@ -58,13 +58,13 @@ except ImportError:
         tomllib = None  # type: ignore[assignment]
 
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-# CONFIG  â€” loaded from config.toml (alongside this script) at startup.
+# -----------------------------------------------------------------------------
+# CONFIG  - loaded from config.toml (alongside this script) at startup.
 #           Sensitive secrets are read from environment variables so they never
 #           live in a plain-text file:
 #             QBIT_PASS          qBittorrent web-UI password
 #             JELLYFIN_API_KEY   Jellyfin long-lived API token
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 
 _CONFIG_FILE = Path(__file__).with_name("config.toml")
 _CONFIG_EXAMPLE = Path(__file__).with_name("config.toml.example")
@@ -77,7 +77,7 @@ def _load_toml_config() -> dict:
         with open(_CONFIG_FILE, "rb") as fh:
             return tomllib.load(fh)
     except Exception as exc:
-        print(f"[WARN] Could not parse config.toml: {exc} â€” using defaults.")
+        print(f"[WARN] Could not parse config.toml: {exc} - using defaults.")
         return {}
 
 def _write_example_config() -> None:
@@ -87,7 +87,7 @@ def _write_example_config() -> None:
     _CONFIG_EXAMPLE.write_text("""\
 # lito1 configuration file
 # Copy this file to config.toml and edit to taste.
-# NEVER put passwords here â€” use the QBIT_PASS / JELLYFIN_API_KEY env vars.
+# NEVER put passwords here - use the QBIT_PASS / JELLYFIN_API_KEY env vars.
 
 [qbittorrent]
 host     = "localhost"
@@ -120,7 +120,7 @@ _TOML = _load_toml_config()
 def _cfg(section: str, key: str, default):
     return _TOML.get(section, {}).get(key, default)
 
-# â”€â”€ qBittorrent â€” password comes from env var (never from config file) â”€â”€â”€â”€â”€â”€â”€â”€
+# -- qBittorrent - password comes from env var (never from config file) --------
 QBIT_HOST     = _cfg("qbittorrent", "host", "localhost")
 QBIT_PORT     = _cfg("qbittorrent", "port", 8080)
 QBIT_USER     = _cfg("qbittorrent", "user", "admin")
@@ -148,7 +148,7 @@ _pref_raw = _cfg("groups", "preferred", [
 PREFERRED_GROUPS  = set(_pref_raw)
 QUALITY_TOLERANCE = _cfg("groups", "quality_tolerance", 0.15)
 
-# HandBrake preset â€” change to suit your quality preference
+# HandBrake preset - change to suit your quality preference
 HB_DEFAULT_PRESET = _cfg("handbrake", "default_preset", "General/Fast 1080p30")
 
 # .hs suffix appended before the file extension to mark hard-subbed outputs
@@ -178,10 +178,10 @@ LINUX_HB_COMMANDS = [
 ]
 
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 # COLOR SYSTEM
 # Two palettes merged: HandBrake (ANSI-safe, TTY-gated) + Fetcher (amber theme)
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 
 def _ansi_supported() -> bool:
     if not sys.stdout.isatty():
@@ -205,18 +205,18 @@ if sys.platform == "win32":
 
 
 class C:
-    # â”€â”€ Reset â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- Reset ----------------------------------------------------------------
     RST       = "\033[0m"          if _COLOR else ""
     RESET     = RST                                    # alias
 
-    # â”€â”€ Amber family â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- Amber family ---------------------------------------------------------
     AMBER     = "\033[39m"         if _COLOR else ""   # terminal default foreground
     AMBER_B   = "\033[97m"         if _COLOR else ""   # bright foreground / values
     ORANGE    = "\033[97m"         if _COLOR else ""   # high-contrast foreground
     ORANGE_DIM= "\033[37m"         if _COLOR else ""   # neutral gray secondary
     B_AMBER   = "\033[1;97m"       if _COLOR else ""   # section titles (bold foreground)
 
-    # â”€â”€ Accent â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- Accent ---------------------------------------------------------------
     WHITE     = "\033[97m"         if _COLOR else ""   # headers / prompts
     WHITE_DIM = "\033[37m"         if _COLOR else ""   # muted text
     B_WHITE   = "\033[1;97m"       if _COLOR else ""   # plan headers (bold)
@@ -228,10 +228,10 @@ class C:
     PINK      = "\033[38;5;213m"   if _COLOR else ""   # genre highlight: Ecchi
     VAL_RED   = "\033[38;5;196m"   if _COLOR else ""   # genre highlight: Romance
     COMEDY_BLUE = "\033[38;5;39m"  if _COLOR else ""   # genre highlight: Comedy (readable blue)
-    MAGENTA   = "\033[95m"         if _COLOR else ""   # DRY-RUN / â˜… badge
+    MAGENTA   = "\033[95m"         if _COLOR else ""   # DRY-RUN / * badge
     DIM       = "\033[2m"          if _COLOR else ""   # separators / secondary
 
-    # â”€â”€ Semantic aliases used by fetcher section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- Semantic aliases used by fetcher section -----------------------------
     HEADER    = AMBER_B
     LABEL     = AMBER
     VALUE     = ORANGE
@@ -253,7 +253,7 @@ class C:
 def co(color: str, text: str) -> str:
     return f"{color}{text}{C.RST}" if _COLOR else text
 
-# Short helpers â€” used throughout
+# Short helpers - used throughout
 def amber(t):   return co(C.AMBER,   t)
 def white(t):   return co(C.WHITE,   t)
 def cyan(t):    return co(C.CYAN,    t)
@@ -269,8 +269,8 @@ def b_white(t): return co(C.B_WHITE, t)
 def c(colour: str, text: str) -> str:
     return f"{colour}{text}{C.RESET}" if _COLOR else text
 
-# â”€â”€ Rainbow cycling for encode stats lines â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-# Bright 256-colour codes that pop on dark terminals â€” wider than the 8-colour
+# -- Rainbow cycling for encode stats lines -----------------------------------
+# Bright 256-colour codes that pop on dark terminals - wider than the 8-colour
 # standard palette so each episode's stats block looks visibly different.
 _RAINBOW_CODES: list[str] = [
     "\033[38;5;196m",   # bright red
@@ -297,9 +297,9 @@ def rainbow_next(text: str) -> str:
     _rainbow_idx += 1
     return f"{code}{text}{C.RST}"
 
-SEP_THIN  = dim("â”€" * 64)
-SEP_THICK = dim("â•" * 64)
-SEP_HASH  = dim("â–“" * 64)
+SEP_THIN  = dim("-" * 64)
+SEP_THICK = dim("=" * 64)
+SEP_HASH  = dim("#" * 64)
 
 SEP_THIN_DEFAULT  = SEP_THIN
 SEP_THICK_DEFAULT = SEP_THICK
@@ -415,23 +415,23 @@ def print_completion_banner(any_failure: bool) -> None:
 
 def finish_run(any_failure: bool = False, exit_code: int | None = None) -> None:
     print()
-    print(c(C.AMBER, "â•" * 64))
+    print(c(C.AMBER, "=" * 64))
     print_completion_banner(any_failure)
-    print(c(C.AMBER, "â•" * 64))
+    print(c(C.AMBER, "=" * 64))
     print()
     print_visual_footer(any_failure)
     if exit_code is not None:
         sys.exit(exit_code)
 
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-# STRUCTURED LOGGING â€” logging.config.dictConfig
+# -----------------------------------------------------------------------------
+# STRUCTURED LOGGING - logging.config.dictConfig
 #
 # All internal log records go to lito1.log (JSON lines) AND to
 # stderr at WARNING+.  Print/colour output is kept for the interactive UI.
 # disable_existing_loggers is explicitly False so qbittorrentapi / requests
 # library logs propagate normally to the root logger.
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 
 _LOG_FILE = Path(__file__).with_name("lito1.log")
 
@@ -478,11 +478,11 @@ def divider(title: str = "") -> None:
     width = 64
     if title:
         pad   = (width - len(title) - 2) // 2
-        left  = "â”€" * pad
-        right = "â”€" * (width - pad - len(title) - 2)
+        left  = "-" * pad
+        right = "-" * (width - pad - len(title) - 2)
         print(c(C.AMBER, f"{left} {title} {right}"))
     else:
-        print(c(C.AMBER, "â”€" * width))
+        print(c(C.AMBER, "-" * width))
 
 
 # Keep connection-refused noise from urllib3 out of the user-facing terminal
@@ -511,9 +511,9 @@ def prompt(label: str, default: str = "") -> str:
     return (input(f"{c(C.PROMPT_CLR, label)}{suffix}: ").strip()) or default
 
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-# PHASE 1 â€” JELLYFIN ANIME DIRECTORY DISCOVERY
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
+# PHASE 1 - JELLYFIN ANIME DIRECTORY DISCOVERY
+# -----------------------------------------------------------------------------
 
 def find_jellyfin_anime_dir() -> Path:
     """
@@ -523,7 +523,7 @@ def find_jellyfin_anime_dir() -> Path:
     Prints what it finds, errors and exits if nothing is found.
     """
     print(f"\n{SEP_THICK}")
-    print(b_white("PHASE 1 â€” Locating Jellyfin Anime Directory"))
+    print(b_white("PHASE 1 - Locating Jellyfin Anime Directory"))
     print(SEP_THICK)
 
     if sys.platform == "win32":
@@ -587,15 +587,15 @@ def find_jellyfin_anime_dir() -> Path:
     found = candidates[0]
     print(f"\n  {green('[FOUND]')} {white(str(found))}")
     print(f"  {dim('Parent confirmed:')} {cyan(found.parent.name)}  "
-          f"{dim('â†’')}  {cyan(found.name)}")
+          f"{dim('→')}  {cyan(found.name)}")
     return found
 
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-# PHASE 2 â€” NYAA SEARCH + QBITTORRENT
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
+# PHASE 2 - NYAA SEARCH + QBITTORRENT
+# -----------------------------------------------------------------------------
 
-# â”€â”€ Nyaa scraping â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -- Nyaa scraping ------------------------------------------------------------
 
 def search_nyaa(query: str, page: int = 1) -> list[dict]:
     params = {
@@ -612,11 +612,11 @@ def search_nyaa(query: str, page: int = 1) -> list[dict]:
                 if attempt < 3:
                     wait = 2 ** attempt
                     print(f"  {yellow(f'[HTTP {resp.status_code}]')} "
-                          f"{c(C.DIM, f'Nyaa page {page} â€” retrying in {wait}s ({attempt}/3)')}")
+                          f"{c(C.DIM, f'Nyaa page {page} - retrying in {wait}s ({attempt}/3)')}")
                     time.sleep(wait)
                     continue
                 print(f"  {yellow('[SKIP]')} "
-                      f"{c(C.DIM, f'Nyaa page {page} unavailable (HTTP {resp.status_code}) â€” skipping.')}")
+                      f"{c(C.DIM, f'Nyaa page {page} unavailable (HTTP {resp.status_code}) - skipping.')}")
                 return []
             resp.raise_for_status()
             break
@@ -624,13 +624,13 @@ def search_nyaa(query: str, page: int = 1) -> list[dict]:
             if attempt < 3:
                 time.sleep(2 ** attempt)
                 continue
-            print(f"  {yellow('[SKIP]')} {c(C.DIM, f'Nyaa page {page} unreachable â€” skipping.')}")
+            print(f"  {yellow('[SKIP]')} {c(C.DIM, f'Nyaa page {page} unreachable - skipping.')}")
             return []
         except requests.exceptions.Timeout:
             if attempt < 3:
                 time.sleep(2 ** attempt)
                 continue
-            print(f"  {yellow('[SKIP]')} {c(C.DIM, f'Nyaa page {page} timed out â€” skipping.')}")
+            print(f"  {yellow('[SKIP]')} {c(C.DIM, f'Nyaa page {page} timed out - skipping.')}")
             return []
 
     soup = BeautifulSoup(resp.text, "html.parser")
@@ -789,7 +789,7 @@ def fetch_batch_file_list(detail_url: str) -> list[str]:
             return []
         entries: list[str] = []
         for li in container.find_all("li"):
-            # Skip folder nodes â€” they contain a nested <ul> whose get_text()
+            # Skip folder nodes - they contain a nested <ul> whose get_text()
             # would concatenate ALL children into one giant blob like:
             # "Encore[GS] file1.mkv(610 MiB)[GS] file2.mkv(538 MiB)..."
             # Only leaf <li> elements (no nested <ul>) are actual files.
@@ -910,7 +910,7 @@ def _classify_batch_file(filename: str) -> dict:
     else:
         category = "tv" if is_video else "other"
 
-    # Use the anitopy-backed parser first â€” it correctly ignores years (2024),
+    # Use the anitopy-backed parser first - it correctly ignores years (2024),
     # resolutions (1080), and hash codes when finding the episode number.
     # Fall back to the first bare number only if anitopy returns nothing.
     m = _EP_NUM_PAT.search(stem)
@@ -998,7 +998,7 @@ def print_batch_info(result: dict, tv_season: int = 1) -> None:
 
     if tv_eps:
         if len(seasons_present) > 1:
-            # Multi-season batch â€” show per-season breakdown
+            # Multi-season batch - show per-season breakdown
             for sn in seasons_present:
                 sn_eps = sorted(
                     f["ep_num"] for f in tv_eps
@@ -1048,6 +1048,7 @@ def find_best_batch_for_season(
     results:      list[dict],
     season:       int | None,
     prefer_group: str = "",
+    allowed_seasons: set[int] | None = None,
 ) -> dict | None:
     """
     Search *results* for the best batch torrent for *season*.
@@ -1059,13 +1060,15 @@ def find_best_batch_for_season(
     fail fast.
 
     Returns None if no qualifying batch found.
+    If allowed_seasons is provided, reject confirmed batches that contain TV
+    seasons outside that set.
     """
     candidates = [
         r for r in results
         if r.get("batch_candidate")
         and (season is None
-             or extract_season_number(r["title"]) == season
-             or extract_season_number(r["title"]) is None)
+             or get_result_season_number(r) == season
+             or extract_explicit_season_number(r["title"]) is None)
     ]
     if not candidates:
         return None
@@ -1080,6 +1083,16 @@ def find_best_batch_for_season(
     for r in candidates:
         print(f"  {c(C.DIM, 'Inspecting batch candidate:')} {c(C.MUTED, r['title'][:60])}")
         if inspect_batch_candidate(r):
+            if allowed_seasons is not None:
+                _binfo = r.get("batch_info") or {}
+                _present = set(_binfo.get("seasons_present") or [])
+                _extra = sorted(sn for sn in _present if sn not in allowed_seasons)
+                if _extra:
+                    _extra_s = ", ".join(f"S{sn:02d}" for sn in _extra)
+                    _allowed_s = ", ".join(f"S{sn:02d}" for sn in sorted(allowed_seasons))
+                    print(f"  {c(C.WARN, '[SKIP]')} {c(C.DIM, f'batch includes unrequested seasons: {_extra_s}')} "
+                          f"{c(C.DIM, f'(allowed: {_allowed_s})')}")
+                    continue
             return r
         print(f"  {c(C.DIM, '  -> single-file or no file list, skipping')}")
 
@@ -1109,6 +1122,7 @@ def post_process_batch_download(
     """
     season_sp_dir = series_dir / "Season 00"
     moved: dict[str, list[Path]] = {"tv": [], "specials": [], "skipped": []}
+    routed_tv_by_season: dict[int, list[int | None]] = defaultdict(list)
     sub_moved = 0
     sub_skipped = 0
     sub_detected = 0
@@ -1206,6 +1220,8 @@ def post_process_batch_download(
         print(f"  {c(C.SUCCESS, tag)} {c(C.MUTED, src.name[:52])} {c(C.DIM, '->')} {label}")
         _route_subtitle_sidecars(src, dest if not dry_run else src, dest_dir)
         moved[bucket].append(dest if not dry_run else src)
+        if bucket == "tv":
+            routed_tv_by_season[file_season].append(file_info.get("ep_num"))
 
     tv_n = len(moved["tv"])
     sp_n = len(moved["specials"])
@@ -1218,6 +1234,20 @@ def post_process_batch_download(
               f"  {c(C.WARN if sub_skipped else C.DIM, str(sub_skipped) + ' failed')}")
     else:
         print(f"  {c(C.DIM, 'Subtitles:')} {c(C.DIM, 'no external sidecar subtitles detected (embedded subs likely).')}")
+
+    if routed_tv_by_season:
+        print(f"  {c(C.DIM, 'Routed seasons:')}")
+        for sn in sorted(routed_tv_by_season):
+            nums = sorted(n for n in routed_tv_by_season[sn] if n is not None)
+            if nums and nums == list(range(nums[0], nums[-1] + 1)):
+                ep_str = f"E{nums[0]}-E{nums[-1]}"
+            elif nums:
+                ep_str = ", ".join(f"E{n}" for n in nums[:10])
+                if len(nums) > 10:
+                    ep_str += f" ... ({len(nums)} total)"
+            else:
+                ep_str = "unknown episode tags"
+            print(f"    {c(C.DIM, f'Season {sn:02d}:')} {c(C.VALUE, ep_str)}")
 
     # Remove empty staging subdirs recursively. Keep only if leftovers remain.
     if not dry_run and download_dir.is_dir():
@@ -1276,7 +1306,7 @@ def _parse_title(title: str) -> dict:
     if _ANITOPY_AVAILABLE:
         result = _anitopy.parse(title)
     elif _GUESSIT_AVAILABLE:
-        # guessit returns a GuessIt dict â€” map keys to anitopy field names so
+        # guessit returns a GuessIt dict - map keys to anitopy field names so
         # the rest of the code doesn't need to change.
         gi = dict(_guessit(title))
         result = {
@@ -1286,9 +1316,89 @@ def _parse_title(title: str) -> dict:
             "anime_type":     gi.get("type", ""),
             "video_resolution": gi.get("screen_size", ""),
         }
-        log.debug("guessit fallback parsed %r â†’ %s", title, json.dumps(result))
+        log.debug("guessit fallback parsed %r -> %s", title, json.dumps(result))
     _parse_cache[title] = result
     return result
+
+
+def _normalize_title_for_match(title: str) -> str:
+    title = title.lower()
+    title = re.sub(r"\[[^\]]*\]|\([^)]*\)|\{[^}]*\}", " ", title)
+    title = re.sub(r"[^a-z0-9]+", " ", title)
+    return re.sub(r"\s+", " ", title).strip()
+
+
+def extract_explicit_season_number(title: str) -> int | None:
+    if _ANITOPY_AVAILABLE:
+        season = _parse_title(title).get("anime_season")
+        if isinstance(season, list):
+            for item in season:
+                if str(item).isdigit():
+                    return int(item)
+        elif season and str(season).isdigit():
+            return int(season)
+    m = re.search(r"\b(\d+)(?:st|nd|rd|th)\s+[Ss]eason\b", title)
+    if m:
+        return int(m.group(1))
+    m = re.search(r"\b[Ss]eason\s+(\d+)\b", title)
+    if m:
+        return int(m.group(1))
+    roman = {"II": 2, "III": 3, "IV": 4, "V": 5, "VI": 6}
+    m = re.search(r"\b[Ss]eason\s+(II|III|IV|V|VI)\b", title)
+    if m:
+        return roman[m.group(1)]
+    m = re.search(r"\bS(\d{1,2})(?:E\d+)?\b", title, re.IGNORECASE)
+    if m:
+        return int(m.group(1))
+    m = re.search(r"\b(?:Part|Cour)\s*(\d+)\b", title, re.IGNORECASE)
+    if m:
+        return int(m.group(1))
+    return None
+
+
+def infer_anilist_season_number(title: str, anime_name: str, season_info: dict[int, dict] | None) -> int:
+    explicit = extract_explicit_season_number(title)
+    if explicit is not None:
+        return explicit
+    if not season_info:
+        return 1
+
+    title_norm = _normalize_title_for_match(title)
+    base_norm = _normalize_title_for_match(anime_name)
+    best_match_season = 1
+    best_match_len = 0
+
+    for season_num, sinfo in season_info.items():
+        if season_num <= 1:
+            continue
+        for alias in sinfo.get("titles") or []:
+            alias_norm = _normalize_title_for_match(alias)
+            if not alias_norm or alias_norm == base_norm:
+                continue
+            if len(alias_norm) < 6:
+                continue
+            if alias_norm in title_norm and len(alias_norm) > best_match_len:
+                best_match_season = season_num
+                best_match_len = len(alias_norm)
+
+    return best_match_season
+
+
+def annotate_results_with_anilist_seasons(
+    results: list[dict],
+    anime_name: str,
+    season_info: dict[int, dict] | None = None,
+) -> dict[int, dict]:
+    season_info = season_info or fetch_anilist_season_info(anime_name)
+    for r in results:
+        resolved = infer_anilist_season_number(r["title"], anime_name, season_info)
+        r["_season_num"] = resolved
+        r["_season_inferred"] = (extract_explicit_season_number(r["title"]) is None and resolved != 1)
+    return season_info
+
+
+def get_result_season_number(result: dict) -> int:
+    return int(result.get("_season_num") or extract_season_number(result["title"]))
 
 
 def extract_sub_group(title: str) -> str | None:
@@ -1304,13 +1414,13 @@ def _torrent_score(r: dict) -> float:
     """
     Composite per-torrent swarm-health score.
 
-    Two signals only â€” both answer "can I download this right now?":
-      â€¢ seeders  (weight 1.0) â€” primary: how many peers can upload to you
-      â€¢ leechers (weight 0.4) â€” secondary: confirms swarm is alive and active
+    Two signals only - both answer "can I download this right now?":
+      * seeders  (weight 1.0) - primary: how many peers can upload to you
+      * leechers (weight 0.4) - secondary: confirms swarm is alive and active
 
     The completed (all-time download) count is intentionally excluded from this
     formula.  It measures historical popularity, not current downloadability, and
-    is heavily biased toward mainstream releases â€” meaning it would actively hurt
+    is heavily biased toward mainstream releases - meaning it would actively hurt
     scoring for obscure groups on niche series, which is exactly the fallback case
     this function needs to handle well.  Completed count is still scraped and
     shown in the group table as informational context.
@@ -1383,24 +1493,24 @@ def pick_best_group(ranked: list[dict]) -> tuple[str, bool, str]:
     Select the best sub group from *ranked*.
 
     Returns (group_name, is_preferred, reason) where:
-      â€¢ is_preferred â€” True if the chosen group is in PREFERRED_GROUPS
-      â€¢ reason       â€” human-readable explanation for the UI
+      * is_preferred - True if the chosen group is in PREFERRED_GROUPS
+      * reason       - human-readable explanation for the UI
 
     Selection logic:
-      1. If the top-ranked group is a preferred group â†’ use it directly.
+      1. If the top-ranked group is a preferred group -> use it directly.
       2. Scan within QUALITY_TOLERANCE of the top score for any preferred group.
-      3. If NO preferred group exists anywhere in the results â†’ fall back to the
-         highest-scored available group (complete fallback path â€” the preferred
+      3. If NO preferred group exists anywhere in the results -> fall back to the
+         highest-scored available group (complete fallback path - the preferred
          list is irrelevant for this series).
     """
     if not ranked:
         return "", False, "no groups found"
 
-    # Groups with 0 individual episodes only have batch torrents â€” skip them
+    # Groups with 0 individual episodes only have batch torrents - skip them
     # for primary group selection since per-episode logic can't work with them.
     ranked_with_eps = [e for e in ranked if e["episode_count"] > 0]
     if not ranked_with_eps:
-        ranked_with_eps = ranked  # everything is batches â€” allow through
+        ranked_with_eps = ranked  # everything is batches - allow through
 
     top = ranked_with_eps[0]
 
@@ -1418,9 +1528,9 @@ def pick_best_group(ranked: list[dict]) -> tuple[str, bool, str]:
                       f"of top score (score {entry['score']:.0f} vs {top['score']:.0f})")
             return entry["group"], True, reason
 
-    # Full fallback â€” no preferred group subbed this series at all.
+    # Full fallback - no preferred group subbed this series at all.
     cov_pct  = f"{top['coverage_ratio']*100:.0f}%"
-    reason   = (f"no preferred group available â€” best available by composite score "
+    reason   = (f"no preferred group available - best available by composite score "
                 f"(seeds={top['total_seeders']}, leechers={top['total_leechers']}, "
                 f"completed={top['total_completed']}, coverage={cov_pct})")
     return top["group"], False, reason
@@ -1452,27 +1562,10 @@ def pick_retry_group(ranked: list[dict], excluded_groups: set[str]) -> tuple[str
     return cand["group"], is_pref, reason
 
 
-# â”€â”€ Season / episode parsing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -- Season / episode parsing -------------------------------------------------
 
 def extract_season_number(title: str) -> int:
-    if _ANITOPY_AVAILABLE:
-        season = _parse_title(title).get("anime_season")
-        if season and str(season).isdigit():
-            return int(season)
-        return 1
-    # Regex fallback
-    m = re.search(r"\b(\d+)(?:st|nd|rd|th)\s+[Ss]eason\b", title)
-    if m: return int(m.group(1))
-    m = re.search(r"\b[Ss]eason\s+(\d+)\b", title)
-    if m: return int(m.group(1))
-    roman = {"II": 2, "III": 3, "IV": 4, "V": 5, "VI": 6}
-    m = re.search(r"\b[Ss]eason\s+(II|III|IV|V|VI)\b", title)
-    if m: return roman[m.group(1)]
-    m = re.search(r"\bS(\d{1,2})(?:E\d+)?\b", title, re.IGNORECASE)
-    if m: return int(m.group(1))
-    m = re.search(r"\b(?:Part|Cour)\s*(\d+)\b", title, re.IGNORECASE)
-    if m: return int(m.group(1))
-    return 1
+    return extract_explicit_season_number(title) or 1
 
 
 def extract_episode_number(title: str) -> int | None:
@@ -1488,7 +1581,7 @@ def extract_episode_number(title: str) -> int | None:
         ep = info.get("episode_number")
         if ep is None:
             return None
-        # Skip batch packs â€” anitopy returns a list for "01-03"
+        # Skip batch packs - anitopy returns a list for "01-03"
         if isinstance(ep, list):
             return None
         ep_str = str(ep)
@@ -1497,16 +1590,22 @@ def extract_episode_number(title: str) -> int | None:
             return None
         return int(ep_str)
     # Regex fallback
-    m = re.search(r"[-â€“]\s*(\d{1,3})(?:\s*[\[\(v\s]|$)", title)
+    m = re.search(r"[--]\s*(\d{1,3})(?:\s*[\[\(v\s]|$)", title)
     if m: return int(m.group(1))
     m = re.search(r"\bE(?:P)?(\d{1,3})\b", title, re.IGNORECASE)
     if m: return int(m.group(1))
     return None
 
 
-def build_season_query(anime_name: str, season: int | None) -> str:
+def build_season_query(anime_name: str, season: int | None, season_info: dict[int, dict] | None = None) -> str:
     if not season or season <= 1:
         return anime_name
+    if season_info:
+        sinfo = season_info.get(season) or {}
+        for alias in sinfo.get("titles") or []:
+            alias = str(alias).strip()
+            if alias and alias.lower() != anime_name.lower():
+                return alias
     return f"{anime_name} S{season:02d}"
 
 
@@ -1521,11 +1620,11 @@ def detect_group_handoffs(
     Proactively detect mid-season group handoffs and build a complete episode
     list from the best available source for each episode.
 
-    A "handoff" is when group A subbed episodes 1â€“6 and then stopped, and group B
-    (or C, or whoever) picked up 7â€“12.  This happens frequently when:
-      â€¢ A fansub group drops a series mid-season due to licensing or burnout
-      â€¢ A simulcast group takes over from a fansub partway through
-      â€¢ Season X was covered by group A but they never returned for season Y
+    A "handoff" is when group A subbed episodes 1-6 and then stopped, and group B
+    (or C, or whoever) picked up 7-12.  This happens frequently when:
+      * A fansub group drops a series mid-season due to licensing or burnout
+      * A simulcast group takes over from a fansub partway through
+      * Season X was covered by group A but they never returned for season Y
 
     Algorithm:
       1. Collect all episodes the primary group has for this season.
@@ -1543,7 +1642,7 @@ def detect_group_handoffs(
     all_pool_eps: dict[int, list[dict]] = defaultdict(list)
 
     for r in results:
-        if season is not None and extract_season_number(r["title"]) != season:
+        if season is not None and get_result_season_number(r) != season:
             continue
         ep = extract_episode_number(r["title"])
         if ep is None:
@@ -1574,7 +1673,7 @@ def detect_group_handoffs(
     if not all_ep_nums:
         return []
 
-    # Build ranked lookup: group â†’ score (for tie-breaking non-primary episodes)
+    # Build ranked lookup: group -> score (for tie-breaking non-primary episodes)
     group_rank: dict[str, float] = {e["group"]: e["score"] for e in all_ranked}
 
     merged: list[dict] = []
@@ -1586,7 +1685,7 @@ def detect_group_handoffs(
             item["_source_group"] = primary
             merged.append(item)
         else:
-            # Primary group doesn't have this episode â€” find best alternative
+            # Primary group doesn't have this episode - find best alternative
             candidates = all_pool_eps[ep]
             # Sort by: (1) preferred group membership, (2) group rank score,
             # (3) composite torrent score
@@ -1613,9 +1712,9 @@ def detect_group_handoffs(
             else:
                 ranges.append((ep_num, ep_num, grp))
         for lo, hi, grp in ranges:
-            rng = f"E{lo}" if lo == hi else f"E{lo}â€“E{hi}"
+            rng = f"E{lo}" if lo == hi else f"E{lo}-E{hi}"
             print(f"  {c(C.AMBER, '[HANDOFF]')} {rng}: "
-                  f"{c(C.MUTED, f'[{primary}]')} {c(C.DIM, 'never released')} â†’ "
+                  f"{c(C.MUTED, f'[{primary}]')} {c(C.DIM, 'never released')} -> "
                   f"filled by {c(C.VALUE, f'[{grp}]')}")
         log.info("Handoffs detected for season %s primary=[%s]: %s",
                  season, primary, handoffs_detected)
@@ -1630,7 +1729,7 @@ def filter_episodes(results: list[dict], sub_group: str,
     for r in results:
         if extract_sub_group(r["title"]) != sub_group:
             continue
-        if season is not None and extract_season_number(r["title"]) != season:
+        if season is not None and get_result_season_number(r) != season:
             continue
         ep = extract_episode_number(r["title"])
         if ep is None:
@@ -1656,7 +1755,7 @@ def filter_episodes_any_group(
 
     Priority order:
       1. Preferred group (from PREFERRED_GROUPS) with highest composite score
-      2. Any group â€” highest composite score wins
+      2. Any group - highest composite score wins
 
     "Composite score" = seedersx1.0 + leechersx0.4 + completedx0.15
     Using completed count as a tiebreaker ensures that an obscure group's
@@ -1664,7 +1763,7 @@ def filter_episodes_any_group(
     """
     ep_candidates: dict[int, dict] = {}
     for r in results:
-        if season is not None and extract_season_number(r["title"]) != season:
+        if season is not None and get_result_season_number(r) != season:
             continue
         ep = extract_episode_number(r["title"])
         if ep is None or ep not in missing_nums:
@@ -1692,7 +1791,7 @@ def filter_episodes_any_group(
         elif exist_is_pref and not new_is_pref:
             pass   # keep existing
         else:
-            # Both preferred or both non-preferred â€” composite score decides
+            # Both preferred or both non-preferred - composite score decides
             if new_score > exist_score:
                 ep_candidates[ep] = r
 
@@ -1700,7 +1799,7 @@ def filter_episodes_any_group(
 
 
 
-# â”€â”€ AniList episode-count verification â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -- AniList episode-count verification ---------------------------------------
 
 ANILIST_API = "https://graphql.anilist.co"
 
@@ -1709,7 +1808,8 @@ query ($search: String) {
   Page(page: 1, perPage: 5) {
     media(search: $search, type: ANIME, sort: SEARCH_MATCH) {
       id
-      title { romaji english }
+      title { romaji english native }
+      synonyms
       episodes
       status
       meanScore
@@ -1722,7 +1822,11 @@ query ($search: String) {
         edges {
           relationType
           node {
-            id title { romaji } episodes status
+            id
+            title { romaji english native }
+            synonyms
+            episodes
+            status
             meanScore genres season seasonYear
             nextAiringEpisode { episode airingAt }
           }
@@ -1739,9 +1843,9 @@ def fetch_anilist_season_info(anime_name: str) -> dict[int, dict]:
     Query AniList for episode info per season.
 
     Returns a dict keyed by season number, each value containing:
-      "total"  â€” total planned episodes (None if unknown / still airing)
-      "aired"  â€” episodes aired so far (= total for finished, <total if airing)
-      "airing" â€” True if the season is currently RELEASING
+      "total"  - total planned episodes (None if unknown / still airing)
+      "aired"  - episodes aired so far (= total for finished, <total if airing)
+      "airing" - True if the season is currently RELEASING
 
     For currently airing seasons, "aired" = nextAiringEpisode.episode - 1,
     which is the highest episode that has actually been broadcast.
@@ -1760,6 +1864,27 @@ def fetch_anilist_season_info(anime_name: str) -> dict[int, dict]:
         if not entries:
             return {}
 
+        def _entry_titles(node: dict) -> list[str]:
+            title_obj = node.get("title") or {}
+            raw_titles = [
+                title_obj.get("english"),
+                title_obj.get("romaji"),
+                title_obj.get("native"),
+            ]
+            raw_titles.extend(node.get("synonyms") or [])
+            seen: set[str] = set()
+            titles: list[str] = []
+            for t in raw_titles:
+                if not t:
+                    continue
+                ts = str(t).strip()
+                key = ts.lower()
+                if not ts or key in seen:
+                    continue
+                seen.add(key)
+                titles.append(ts)
+            return titles
+
         def _entry_info(node: dict) -> dict:
             status  = (node.get("status") or "").upper()
             airing  = status == "RELEASING"
@@ -1772,7 +1897,7 @@ def fetch_anilist_season_info(anime_name: str) -> dict[int, dict]:
             else:
                 aired = None
 
-            # Metadata fields â€” present on the root entry, may be absent on sequel nodes
+            # Metadata fields - present on the root entry, may be absent on sequel nodes
             score   = node.get("meanScore")          # 0-100 int or None
             genres  = node.get("genres") or []       # list of strings
             season  = node.get("season") or ""       # "WINTER", "SPRING", etc.
@@ -1792,6 +1917,7 @@ def fetch_anilist_season_info(anime_name: str) -> dict[int, dict]:
                 "season":  season,
                 "year":    year,
                 "studio":  studio,
+                "titles":  _entry_titles(node),
             }
 
         best       = entries[0]
@@ -1833,19 +1959,19 @@ def print_show_card(sinfo: dict) -> None:
         # Tiered colour + label based on AniList mean score (0-100)
         if score >= 80:
             color     = C.GREEN
-            indicator = "â˜…â˜…â˜…â˜…â˜…"
+            indicator = "*****"
         elif score >= 70:
             color     = C.GREEN
-            indicator = "â˜…â˜…â˜…â˜…â˜†"
+            indicator = "****."
         elif score >= 60:
             color     = C.YELLOW
-            indicator = "â˜…â˜…â˜…â˜†â˜†"
+            indicator = "***.."
         elif score >= 50:
             color     = C.YELLOW
-            indicator = "â˜…â˜…â˜†â˜†â˜†"
+            indicator = "**..."
         else:
             color     = C.RED
-            indicator = "â˜…â˜†â˜†â˜†â˜†"
+            indicator = "*...."
 
         score_str = c(color, f"{score_f:.1f}/10  {indicator}")
         print(f"  {c(C.LABEL, 'Rating:')}       {score_str} "
@@ -1872,7 +1998,7 @@ def print_show_card(sinfo: dict) -> None:
     elif year:
         parts.append(c(C.DIM, str(year)))
     if parts:
-        print(f"  {c(C.LABEL, 'Studio:')}       {c(C.DIM, ' Â· ').join(parts)}")
+        print(f"  {c(C.LABEL, 'Studio:')}       {c(C.DIM, '  |  ').join(parts)}")
 
 
 def verify_episode_coverage(
@@ -1895,7 +2021,7 @@ def verify_episode_coverage(
     aired        = sinfo.get("aired")
     is_airing    = sinfo.get("airing", False)
 
-    # For gap checking purposes, use "aired" as the ceiling â€” never flag
+    # For gap checking purposes, use "aired" as the ceiling - never flag
     # episodes that haven't been broadcast yet as missing.
     # For a finished show:  aired == total
     # For a airing show:    aired = last broadcast episode, total may be unknown
@@ -1907,21 +2033,21 @@ def verify_episode_coverage(
                                      # excluded from gap/count checks
     found_count = len(found_nums)
 
-    # â”€â”€ AniList split-cour guard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- AniList split-cour guard ----------------------------------------------
     # AniList lists split-cour shows as separate entries (~12 ep each).
     # If we found MORE episodes than AniList's total, it's a split-cour entry.
     if effective_expected and found_count > effective_expected:
         print(f"\n  {c(C.DIM, 'AniList:')} expected {c(C.VALUE2, str(effective_expected))} ep(s) "
-              f"but found {c(C.AMBER_B, str(found_count))} â€” "
+              f"but found {c(C.AMBER_B, str(found_count))} - "
               f"{c(C.DIM, 'split-cour listing detected, skipping AniList count.')}")
         effective_expected = None
         expected           = None
     elif is_airing and aired is not None:
-        status_str = c(C.AMBER, f"airing â€” {aired} ep(s) aired so far")
+        status_str = c(C.AMBER, f"airing - {aired} ep(s) aired so far")
         if expected:
             status_str += c(C.DIM, f" of {expected} total")
         print(f"\n  {c(C.LABEL, 'AniList check:')} {status_str}")
-        print(f"  {c(C.DIM, 'Currently airing â€” only checking for gaps up to E'+ str(aired) + '. '
+        print(f"  {c(C.DIM, 'Currently airing - only checking for gaps up to E'+ str(aired) + '. '
               'Future episodes are not counted as missing.')}")
     elif effective_expected:
         print(f"\n  {c(C.LABEL, 'AniList check:')} "
@@ -1931,8 +2057,8 @@ def verify_episode_coverage(
         print(f"\n  {c(C.DIM, 'AniList: no episode count for Season')} "
               f"{c(C.VALUE2, str(season))}")
 
-    # â”€â”€ Gap detection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    # Only check within the aired range â€” never flag unaired eps as missing.
+    # -- Gap detection ---------------------------------------------------------
+    # Only check within the aired range - never flag unaired eps as missing.
     # For currently airing shows, cap the expected range at `aired`.
     if found_nums:
         # Cap the check range at effective_expected so we don't flag future eps
@@ -1950,28 +2076,28 @@ def verify_episode_coverage(
 
     missing_nums = sorted(set(below_start + gaps))
 
-    # â”€â”€ Check for episodes before the group's start (cross-group handoff) â”€â”€â”€â”€â”€â”€
+    # -- Check for episodes before the group's start (cross-group handoff) ------
     # If the chosen group starts at E13, episodes E1-12 may exist in the pool
-    # under a different group (e.g. HorribleSubs â†’ SubsPlease handoff).
+    # under a different group (e.g. HorribleSubs -> SubsPlease handoff).
     pre_start_missing: list[int] = []
     if found_nums and found_nums[0] > 1:
         all_season_eps = sorted({
             e for r in raw
-            if (extract_season_number(r["title"]) == season
+            if (get_result_season_number(r) == season
                 and (e := extract_episode_number(r["title"])) is not None)
         })
         pre_start_missing = [e for e in all_season_eps if e < found_nums[0]]
 
     if pre_start_missing:
         print(f"  {c(C.LABEL, 'Cross-group fill:')} "
-              f"E{pre_start_missing[0]}â€“E{pre_start_missing[-1]} exist in pool "
-              f"under other groups â€” adding best available torrents ...")
+              f"E{pre_start_missing[0]}-E{pre_start_missing[-1]} exist in pool "
+              f"under other groups - adding best available torrents ...")
         fill_eps = filter_episodes_any_group(
             raw, season, episode_range, chosen_group, pre_start_missing
         )
         if fill_eps:
             fill_groups = sorted({extract_sub_group(r["title"]) for r in fill_eps})
-            print(f"  {c(C.SUCCESS, 'âœ“')} Found E{pre_start_missing[0]}â€“E{pre_start_missing[-1]} "
+            print(f"  {c(C.SUCCESS, '✓')} Found E{pre_start_missing[0]}-E{pre_start_missing[-1]} "
                   f"via: {c(C.VALUE, ', '.join(f'[{g}]' for g in fill_groups))}")
             found_episodes = fill_eps + found_episodes
             found_nums     = sorted(e for r in found_episodes
@@ -1980,17 +2106,17 @@ def verify_episode_coverage(
 
     if not missing_nums:
         if found_count > 0:
-            print(f"  {c(C.SUCCESS, 'âœ“')} No in-range gaps detected "
-                  f"(E{found_nums[0]}â€“E{found_nums[-1]}, {found_count} ep(s)).")
+            print(f"  {c(C.SUCCESS, '✓')} No in-range gaps detected "
+                  f"(E{found_nums[0]}-E{found_nums[-1]}, {found_count} ep(s)).")
         return found_episodes
 
-    # â”€â”€ Fill search â€” genuine in-range gaps â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- Fill search - genuine in-range gaps ----------------------------------
     print(f"  {yellow('[GAP]')} Missing episode(s) within covered range: "
           f"{c(C.AMBER_B, ', '.join(str(n) for n in missing_nums[:20]))}"
           + (f" ... (+{len(missing_nums)-20} more)" if len(missing_nums) > 20 else ""))
     print(f"  {c(C.LABEL, 'Running fill search ...')}")
 
-    fill_queries = [build_season_query(anime_name, season)]
+    fill_queries = [build_season_query(anime_name, season, season_info)]
     if len(missing_nums) <= 6:
         for n in missing_nums:
             fill_queries.append(f"{anime_name} - {n:02d}")
@@ -1998,6 +2124,7 @@ def verify_episode_coverage(
     seen = {r["detail_url"] for r in raw}
     for q in fill_queries:
         extra = search_all_pages(q, max(args.pages, 3))
+        annotate_results_with_anilist_seasons(extra, anime_name, season_info)
         new   = [r for r in extra if r["detail_url"] not in seen]
         raw  += new
         seen |= {r["detail_url"] for r in new}
@@ -2014,7 +2141,7 @@ def verify_episode_coverage(
         )
         if cross_fill:
             cross_groups = sorted({extract_sub_group(r["title"]) for r in cross_fill})
-            print(f"  {c(C.SUCCESS, 'âœ“')} Cross-group fill via: "
+            print(f"  {c(C.SUCCESS, '✓')} Cross-group fill via: "
                   f"{c(C.VALUE, ', '.join(f'[{g}]' for g in cross_groups))}")
             updated_eps = sorted(updated_eps + cross_fill,
                                  key=lambda r: extract_episode_number(r["title"]) or 0)
@@ -2029,7 +2156,7 @@ def verify_episode_coverage(
             print(f"  {yellow('[WARN]')} Still missing after fill: "
                   f"{c(C.AMBER_B, ', '.join(str(n) for n in still_missing[:20]))}")
     else:
-        print(f"  {c(C.SUCCESS, 'âœ“')} Fill successful â€” now have "
+        print(f"  {c(C.SUCCESS, '✓')} Fill successful - now have "
               f"{c(C.VALUE2, str(len(updated_eps)))} episode(s).")
 
     # Merge with any pre-start fill we already did
@@ -2043,20 +2170,20 @@ def verify_episode_coverage(
     return found_episodes
 
 
-# â”€â”€ Directory helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -- Directory helpers ---------------------------------------------------------
 
 _ILLEGAL_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
-# Substitute before stripping â€” preserves meaning rather than silently dropping
+# Substitute before stripping - preserves meaning rather than silently dropping
 _CHAR_SUBS: list[tuple[str, str]] = [
-    ("Â½", "1-2"),   # Ranma Â½  â†’  Ranma 1-2
-    ("â…“", "1-3"),
-    ("Â¼", "1-4"),
-    ("Â¾", "3-4"),
+    ("½", "1-2"),   # Ranma ½  ->  Ranma 1-2
+    ("⅓", "1-3"),
+    ("¼", "1-4"),
+    ("¾", "3-4"),
     ("/", "-"),     # forward slash is a Windows path separator
-    ("Ã¯Â¼Å¡", " "),    # full-width colon
-    ("Ã¯Â¼Å¸", ""),
-    ("Ã¯Â¼Å ", ""),
+    (":", " "),    # full-width colon
+    ("?", ""),
+    ("Ã¯¼Å ", ""),
 ]
 
 
@@ -2215,7 +2342,7 @@ def build_save_path(anime_dir: Path, anime_name: str, season: int | None,
     Construct a Jellyfin-compliant save path.
 
     Series folder format:  Anime Name [provider-XXXX]
-    Season folder format:  Season 01  (zero-padded, space-separated â€” not dots)
+    Season folder format:  Season 01  (zero-padded, space-separated - not dots)
 
     Using "Season.01" or "Series S" breaks Jellyfin's sequence-parsing logic.
     The optional *provider_id* parameter appends an explicit scraper tag such as
@@ -2225,15 +2352,15 @@ def build_save_path(anime_dir: Path, anime_name: str, season: int | None,
     series_name = sanitise_name(anime_name)
     if provider_id:
         series_name = f"{series_name} [{sanitise_name(provider_id)}]"
-    # Jellyfin requires "Season NN" â€” NOT "Season.NN" or raw season names
+    # Jellyfin requires "Season NN" - NOT "Season.NN" or raw season names
     season_folder = f"Season {season:02d}" if season else "Season 01"
     save_path = anime_dir / series_name / season_folder
     save_path.mkdir(parents=True, exist_ok=True)
-    log.debug("build_save_path â†’ %s", save_path)
+    log.debug("build_save_path -> %s", save_path)
     return str(save_path)
 
 
-# â”€â”€ qBittorrent helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -- qBittorrent helpers -------------------------------------------------------
 
 def connect_qbit() -> qbittorrentapi.Client:
     client = qbittorrentapi.Client(
@@ -2365,7 +2492,7 @@ class CleanupMonitor:
 
     def _run(self) -> None:
         mode = "torrent + files" if self.delete_files else "torrent entry only"
-        print(f"\n{c(C.AMBER, '[Monitor]')} Started â€” "
+        print(f"\n{c(C.AMBER, '[Monitor]')} Started - "
               f"polling every {c(C.VALUE2, str(MONITOR_INTERVAL))}s  "
               f"| on completion: remove {c(C.ORANGE, mode)}")
         while not self._stop_event.is_set():
@@ -2374,7 +2501,7 @@ class CleanupMonitor:
         self._check()
         remaining = self.pending_count()
         if remaining:
-            print(f"\n{c(C.AMBER, '[Monitor]')} Stopped â€” "
+            print(f"\n{c(C.AMBER, '[Monitor]')} Stopped - "
                   f"{c(C.WARN, str(remaining))} torrent(s) still pending.")
         else:
             print(f"\n{c(C.AMBER, '[Monitor]')} "
@@ -2396,7 +2523,7 @@ class CleanupMonitor:
             torrent = torrents.get(info_hash)
             tag     = c(C.AMBER, "[Monitor]")
             if torrent is None:
-                print(f"\n{tag} {c(C.ORANGE, label)} â€” "
+                print(f"\n{tag} {c(C.ORANGE, label)} - "
                       f"{c(C.WARN, 'not found (already removed?)')}")
                 to_remove.append(info_hash)
                 continue
@@ -2405,9 +2532,9 @@ class CleanupMonitor:
             if state in DONE_STATES or (torrent.completion_on and torrent.completion_on > 0):
                 action = ("removing torrent + files"
                           if self.delete_files else "removing torrent entry")
-                print(f"\n{tag} {c(C.SUCCESS, 'âœ“')} "
+                print(f"\n{tag} {c(C.SUCCESS, '✓')} "
                       f"{c(C.ORANGE, label)} finished "
-                      f"{c(C.INFO_DIM, f'({state})')} â€” {c(C.AMBER, action)}")
+                      f"{c(C.INFO_DIM, f'({state})')} - {c(C.AMBER, action)}")
                 try:
                     # delete_data=True permanently deletes files from disk
                     # (including residual .rar archives, samples, .nfo files).
@@ -2425,8 +2552,8 @@ class CleanupMonitor:
                     log.exception("Failed to delete torrent %s", info_hash)
                 to_remove.append(info_hash)
             else:
-                print(f"\n{tag} {c(C.INFO_DIM, 'â€¦')} "
-                      f"{c(C.ORANGE, label)} â€” "
+                print(f"\n{tag} {c(C.INFO_DIM, '...')} "
+                      f"{c(C.ORANGE, label)} - "
                       f"{c(C.CYAN_DIM, state)} "
                       f"{c(C.VALUE2, f'({progress:.1f}%)')}")
         with self._lock:
@@ -2529,11 +2656,11 @@ def _remove_new_files_since(root: Path, before: set[str]) -> int:
     return removed
 
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-# PHASE 3 â€” HANDBRAKE HARD-SUB BURNING
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
+# PHASE 3 - HANDBRAKE HARD-SUB BURNING
+# -----------------------------------------------------------------------------
 
-# â”€â”€ HandBrakeCLI discovery â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -- HandBrakeCLI discovery ---------------------------------------------------
 
 def find_handbrake(override: str | None = None) -> str:
     if override:
@@ -2561,7 +2688,7 @@ def find_handbrake(override: str | None = None) -> str:
     ))
 
 
-# â”€â”€ File helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -- File helpers -------------------------------------------------------------
 
 def _is_hs_output(p: Path) -> bool:
     return p.stem.endswith(HS_MARKER)
@@ -2580,7 +2707,7 @@ def collect_video_files(root: Path) -> list[Path]:
 def scan_episodes_on_disk(save_path: str) -> set[int]:
     """
     Scan the season directory and return the set of episode numbers
-    that are already present on disk â€” counting BOTH raw source files
+    that are already present on disk - counting BOTH raw source files
     AND .hs encoded outputs.
 
     This is the filesystem-as-source-of-truth check used before polling RSS.
@@ -2602,7 +2729,7 @@ def scan_episodes_on_disk(save_path: str) -> set[int]:
         if not p.is_file():
             continue
         # p.suffix is always the real extension (.mkv, .mp4) regardless of
-        # whether the stem contains .hs â€” never re-derive it from the stem
+        # whether the stem contains .hs - never re-derive it from the stem
         suffix = p.suffix.lower()
         if suffix not in VIDEO_EXTENSIONS:
             continue
@@ -2611,7 +2738,7 @@ def scan_episodes_on_disk(save_path: str) -> set[int]:
                 continue
         except OSError:
             continue
-        # Pass the full original filename to the episode parser â€”
+        # Pass the full original filename to the episode parser -
         # anitopy handles .hs.mkv filenames correctly
         ep = extract_episode_number(p.name)
         if ep is not None:
@@ -2652,7 +2779,7 @@ def wait_for_files_stable(files: list[Path],
         still_waiting = [f for f in files if stable[f] < stable_rounds]
         if still_waiting:
             print(f"  {dim('Still stabilising:')} "
-                  f"{yellow(str(len(still_waiting)))} file(s) â€” "
+                  f"{yellow(str(len(still_waiting)))} file(s) - "
                   f"{dim('re-checking in')} {amber(str(poll_interval))}s")
             time.sleep(poll_interval)
         else:
@@ -2665,7 +2792,7 @@ def output_path(p: Path) -> Path:
     return p.with_name(p.stem + HS_MARKER + p.suffix)
 
 
-# â”€â”€ Unicode script detection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -- Unicode script detection -------------------------------------------------
 
 _SCRIPT_RANGES: list[tuple[int, int, str]] = [
     (0x3040, 0x309F, "Japanese"),
@@ -2690,7 +2817,7 @@ _SCRIPT_RANGES: list[tuple[int, int, str]] = [
 ]
 
 
-# iso639-2 â†’ human-readable language name, used to resolve ambiguous CJK blocks
+# iso639-2 -> human-readable language name, used to resolve ambiguous CJK blocks
 _ISO639_MAP: dict[str, str] = {
     "jpn": "Japanese",
     "zho": "Chinese", "chi": "Chinese",
@@ -2720,7 +2847,7 @@ def _safe_lang(text: str, iso639_hint: str | None = None) -> str:
     using *iso639_hint* (a raw iso639-2 code from the HandBrake scan line)
     when available, falling back to script detection otherwise.
     """
-    # Fast path: honour explicit iso639 hint â€” resolves kanji ambiguity
+    # Fast path: honour explicit iso639 hint - resolves kanji ambiguity
     if iso639_hint:
         mapped = _ISO639_MAP.get(iso639_hint.lower().strip())
         if mapped:
@@ -2747,7 +2874,7 @@ def _safe_lang(text: str, iso639_hint: str | None = None) -> str:
     return best
 
 
-# â”€â”€ HB scan helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -- HB scan helpers ----------------------------------------------------------
 
 def run_scan(hb: str, video_file: Path) -> str:
     cmd = [hb, "--input", str(video_file), "--scan", "--title", "0"]
@@ -2773,7 +2900,7 @@ def extract_raw_section(scan_output: str, section_keyword: str) -> list[str]:
     return raw
 
 
-# â”€â”€ Subtitle parsing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -- Subtitle parsing ---------------------------------------------------------
 
 def _parse_sub_line(line: str) -> dict | None:
     m = re.match(r"\s+\+\s+(\d+),\s+(.+)$", line)
@@ -2819,7 +2946,7 @@ def parse_subtitle_tracks(scan_output: str) -> tuple[list[dict], list[str]]:
     return tracks, raw_lines
 
 
-# â”€â”€ Audio parsing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -- Audio parsing ------------------------------------------------------------
 
 def _parse_audio_line(line: str) -> dict | None:
     """
@@ -2827,15 +2954,15 @@ def _parse_audio_line(line: str) -> dict | None:
 
     Handles all real-world formats:
 
-      Format A â€” separate paren groups (BD / remux):
+      Format A - separate paren groups (BD / remux):
         + 1, Japanese (DTS-HD MA) (5.1 ch) (iso639-2: jpn)
 
-      Format B â€” comma-separated single paren (SubsPlease / web-dl):
-        + 1, Ã¦â€”Â¥Ã¦Å“Â¬Ã¨ÂªÅ¾ (AAC LC, 2.0 ch) (iso639-2: jpn)
+      Format B - comma-separated single paren (SubsPlease / web-dl):
+        + 1, Ã¦-Â¥Ã¦Å“Â¬Ã¨ÂªÅ¾ (AAC LC, 2.0 ch) (iso639-2: jpn)
         + 1, æ—¥æœ¬èªž (AAC LC, 2.0 ch iso639-2: jpn)   â† iso inline, no own paren
 
     The iso639-2 code is always extracted first (before any stripping) and
-    passed to _safe_lang() so that non-Latin track names like "Ã¦â€”Â¥Ã¦Å“Â¬Ã¨ÂªÅ¾"
+    passed to _safe_lang() so that non-Latin track names like "Ã¦-Â¥Ã¦Å“Â¬Ã¨ÂªÅ¾"
     resolve definitively to "Japanese" regardless of where the tag appears.
     """
     m = re.match(r"\s+\+\s+(\d+),\s+(.+)$", line)
@@ -2845,23 +2972,23 @@ def _parse_audio_line(line: str) -> dict | None:
     idx  = int(m.group(1))
     rest = m.group(2).strip()
 
-    # â”€â”€ Step 1: extract iso639-2 hint from anywhere on the line, before cleaning
+    # -- Step 1: extract iso639-2 hint from anywhere on the line, before cleaning
     iso_m    = re.search(r"iso639-2:\s*([a-z]{3})", rest, re.IGNORECASE)
     iso_hint = iso_m.group(1).lower() if iso_m else None
 
-    # â”€â”€ Step 2: scrub the iso tag in ALL forms so it never leaks into fields
-    #   Form A â€” own paren:   (iso639-2: jpn)
-    #   Form B â€” in codec:    (AAC LC, 2.0 ch iso639-2: jpn)
-    #   Form C â€” bare inline: AAC LC 2.0 ch iso639-2: jpn
+    # -- Step 2: scrub the iso tag in ALL forms so it never leaks into fields
+    #   Form A - own paren:   (iso639-2: jpn)
+    #   Form B - in codec:    (AAC LC, 2.0 ch iso639-2: jpn)
+    #   Form C - bare inline: AAC LC 2.0 ch iso639-2: jpn
     rest = re.sub(r"\s*\(iso639-2:[^)]+\)", "", rest)          # Form A
     rest = re.sub(r"\s*,?\s*iso639-2:\s*[a-z]{3}", "", rest,   # Form B/C
                   flags=re.IGNORECASE)
     rest = rest.strip()
 
-    # â”€â”€ Step 3: split language name from the paren block
+    # -- Step 3: split language name from the paren block
     lang_m = re.match(r"(.+?)\s+\((.*)$", rest)
     if not lang_m:
-        # No paren at all â€” just a language name
+        # No paren at all - just a language name
         return {
             "index":    idx,
             "language": _safe_lang(rest, iso_hint),
@@ -2873,7 +3000,7 @@ def _parse_audio_line(line: str) -> dict | None:
     lang       = _safe_lang(lang_raw, iso_hint)
     after_lang = lang_m.group(2)   # everything after the first opening "("
 
-    # â”€â”€ Step 4: collect remaining paren groups and classify codec / channels
+    # -- Step 4: collect remaining paren groups and classify codec / channels
     parens = re.findall(r"\(([^)]*)\)", "(" + after_lang)
 
     codec    = "unknown"
@@ -2916,7 +3043,7 @@ def parse_audio_tracks(scan_output: str) -> tuple[list[dict], list[str]]:
     return tracks, raw_lines
 
 
-# â”€â”€ Language helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -- Language helpers ---------------------------------------------------------
 
 def _is_english(lang: str) -> bool:
     return lang.lower() in ("english", "eng")
@@ -2929,7 +3056,7 @@ def _is_japanese(lang: str) -> bool:
     )
 
 
-# â”€â”€ Subtitle scoring â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -- Subtitle scoring ---------------------------------------------------------
 
 _DIALOGUE_BOOST = [
     r"\bdialogue\b", r"\bdialog\b", r"\bfull\b", r"\bmain\b",
@@ -2959,7 +3086,7 @@ def _dialogue_score(track: dict) -> int:
     return score
 
 
-# â”€â”€ Auto-selection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -- Auto-selection ------------------------------------------------------------
 
 def auto_select_subtitle(tracks: list[dict]) -> tuple[dict | None, str]:
     candidates = [t for t in tracks if _is_english(t["language"])]
@@ -2970,17 +3097,17 @@ def auto_select_subtitle(tracks: list[dict]) -> tuple[dict | None, str]:
         return None, msg
     if len(candidates) == 1:
         t = candidates[0]
-        return t, f"only one English track â€” track {t['index']}"
+        return t, f"only one English track - track {t['index']}"
     scored  = sorted(candidates, key=_dialogue_score, reverse=True)
     best    = scored[0]
     rejects = ["track {} '{}' (score {})".format(
                    t['index'], t.get('title') or 'untitled', _dialogue_score(t))
                for t in scored[1:]]
-    reason  = (f"score {_dialogue_score(best)} â€” highest among "
+    reason  = (f"score {_dialogue_score(best)} - highest among "
                f"{len(candidates)} English tracks; "
                f"rejected: {', '.join(rejects)}")
     if _dialogue_score(best) < 0:
-        reason += f"  {yellow('âš  score is negative â€” may still be Signs/Songs')}"
+        reason += f"  {yellow('[WARN] score is negative - may still be Signs/Songs')}"
     return best, reason
 
 
@@ -2989,16 +3116,16 @@ def auto_select_audio(tracks: list[dict]) -> tuple[dict | None, str]:
     if japanese:
         t  = japanese[0]
         ch = f" {t['channels']}" if t["channels"] else ""
-        return t, f"first Japanese track â€” {t['codec']}{ch}"
+        return t, f"first Japanese track - {t['codec']}{ch}"
     if tracks:
         t  = tracks[0]
         ch = f" {t['channels']}" if t["channels"] else ""
         return t, (f"no Japanese audio found; "
-                   f"using first available â€” {t['language']} {t['codec']}{ch}")
+                   f"using first available - {t['language']} {t['codec']}{ch}")
     return None, "no audio tracks in scan"
 
 
-# â”€â”€ Display helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -- Display helpers -----------------------------------------------------------
 
 def _fmt_sub(t: dict) -> str:
     title_s = cyan(f'  "{t["title"]}"') if t.get("title") else ""
@@ -3025,29 +3152,29 @@ def _show_subtitle_tracks(tracks: list[dict], raw_lines: list[str],
         print(f"\n  {dim('Raw HandBrake subtitle section:')}")
         for rl in raw_lines:
             print(dim(f"    {rl.strip()}"))
-    print(f"\n{b_amber('â•â•â• Subtitle Tracks â•â•â•')}")
+    print(f"\n{b_amber('=== Subtitle Tracks ===')}")
     if not tracks:
-        print(f"  {dim('(none parsed â€” see raw lines above)')}")
+        print(f"  {dim('(none parsed - see raw lines above)')}")
         return
     for t in tracks:
-        marker  = green("  â—€ AUTO") if (chosen and t["index"] == chosen["index"]) else "       "
+        marker  = green("  > AUTO") if (chosen and t["index"] == chosen["index"]) else "       "
         score_s = dim(f"  [{_dialogue_score(t):+d}]")
         idx_s   = cyan(f"{t['index']:2d}.")
         print(f"  {idx_s} {_fmt_sub(t)}{score_s}{marker}")
 
 
 def _show_audio_tracks(tracks: list[dict], chosen: dict | None) -> None:
-    print(f"\n{b_amber('â•â•â• Audio Tracks â•â•â•')}")
+    print(f"\n{b_amber('=== Audio Tracks ===')}")
     if not tracks:
         print(f"  {yellow('[WARN]')} No audio tracks found in scan.")
         return
     for t in tracks:
-        marker = green("  â—€ AUTO") if (chosen and t["index"] == chosen["index"]) else "       "
+        marker = green("  > AUTO") if (chosen and t["index"] == chosen["index"]) else "       "
         idx_s  = cyan(f"{t['index']:2d}.")
         print(f"  {idx_s} {_fmt_aud(t)}{marker}")
 
 
-# â”€â”€ Scan + auto-select (fully automatic â€” no override prompts) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -- Scan + auto-select (fully automatic - no override prompts) ---------------
 
 def scan_and_autoselect(hb: str, sample: Path) -> tuple[dict | None, dict | None]:
     """
@@ -3071,22 +3198,22 @@ def scan_and_autoselect(hb: str, sample: Path) -> tuple[dict | None, dict | None
     print(b_amber("  AUTO-SELECTION"))
     print(SEP_THIN)
     if auto_sub:
-        print(f"  {green('âœ” Subtitle')} : track {cyan(str(auto_sub['index']))}  {_fmt_sub(auto_sub)}")
+        print(f"  {green('OK Subtitle')} : track {cyan(str(auto_sub['index']))}  {_fmt_sub(auto_sub)}")
         print(f"    {dim('Reason: ' + sub_reason)}")
     else:
-        print(f"  {yellow('âš  Subtitle')} : {yellow('none')}  {dim(sub_reason)}")
+        print(f"  {yellow('[WARN] Subtitle')} : {yellow('none')}  {dim(sub_reason)}")
 
     if auto_aud:
-        print(f"  {green('âœ” Audio')}    : track {cyan(str(auto_aud['index']))}  {_fmt_aud(auto_aud)}")
+        print(f"  {green('OK Audio')}    : track {cyan(str(auto_aud['index']))}  {_fmt_aud(auto_aud)}")
         print(f"    {dim('Reason: ' + aud_reason)}")
     else:
-        print(f"  {yellow('âš  Audio')}    : {yellow('none')}  {dim(aud_reason)}")
+        print(f"  {yellow('[WARN] Audio')}    : {yellow('none')}  {dim(aud_reason)}")
     print(SEP_THIN)
 
     return auto_sub, auto_aud
 
 
-# â”€â”€ HandBrakeCLI command + encode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -- HandBrakeCLI command + encode --------------------------------------------
 
 def build_command(hb: str, input_file: Path, output_file: Path,
                   preset: str, subtitle_track: dict | None,
@@ -3144,7 +3271,7 @@ def run_encode(cmd: list[str]) -> int:
                 r"Finished work at",
                 line
             ):
-                # Encode-summary stats â€” cycle rainbow so each episode's
+                # Encode-summary stats - cycle rainbow so each episode's
                 # completion block is a different vivid colour at a glance
                 print(rainbow_next(f"  {line}"), flush=True)
             else:
@@ -3180,20 +3307,20 @@ def build_ffmpeg_nvenc_command(
     Build an FFmpeg NVENC hybrid filterchain command for hardsub burning.
 
     Architecture (from the optimisation document):
-      â€¢ h264_cuvid  â€” decodes directly to system RAM (avoids PCIe stall on decode)
-      â€¢ subtitles   â€” CPU renders .ass subtitle exactly once (software, unavoidable)
-      â€¢ hwupload_cuda â€” uploads the rendered frame to VRAM in one DMA transfer
-      â€¢ split=N     â€” the GPU splits the frame for each output resolution
-      â€¢ scale_npp   â€” hardware NPP scaler handles each output independently
-      â€¢ h264_nvenc  â€” hardware encoder on the NVENC silicon
+      * h264_cuvid  - decodes directly to system RAM (avoids PCIe stall on decode)
+      * subtitles   - CPU renders .ass subtitle exactly once (software, unavoidable)
+      * hwupload_cuda - uploads the rendered frame to VRAM in one DMA transfer
+      * split=N     - the GPU splits the frame for each output resolution
+      * scale_npp   - hardware NPP scaler handles each output independently
+      * h264_nvenc  - hardware encoder on the NVENC silicon
 
     If both output_1080p and output_720p are provided the subtitle is rendered
-    exactly once and the GPU handles both scale operations simultaneously â€” a
+    exactly once and the GPU handles both scale operations simultaneously - a
     significant efficiency gain over running two separate encode passes.
 
     If subtitle_index is None the subtitles filter is omitted (audio-only fix).
     """
-    # â”€â”€ Input / decode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- Input / decode --------------------------------------------------------
     cmd = [
         ffmpeg, "-y",
         "-vsync", "0",
@@ -3202,10 +3329,10 @@ def build_ffmpeg_nvenc_command(
         "-i", str(input_file),
     ]
 
-    # â”€â”€ Audio map â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- Audio map -------------------------------------------------------------
     audio_map = ["-map", f"0:a:{audio_index - 1}"] if audio_index else ["-map", "0:a:0"]
 
-    # â”€â”€ Build filtergraph â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- Build filtergraph -----------------------------------------------------
     dual_output = output_1080p is not None and output_720p is not None
 
     if subtitle_index is not None:
@@ -3268,7 +3395,7 @@ def run_ffmpeg_nvenc_hardsub(
     """
     Hardsub a single *video* using the FFmpeg NVENC hybrid filterchain.
 
-    Returns (successes, failures) â€” lists of Path objects.
+    Returns (successes, failures) - lists of Path objects.
     """
     try:
         ffmpeg = find_ffmpeg()
@@ -3407,7 +3534,7 @@ def process_files_ffmpeg(
         return 1
 
 
-# â”€â”€ Per-file fallback â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -- Per-file fallback --------------------------------------------------------
 
 def _find_by_language(tracks: list[dict], language: str) -> dict | None:
     for t in tracks:
@@ -3416,7 +3543,7 @@ def _find_by_language(tracks: list[dict], language: str) -> dict | None:
     return None
 
 
-# â”€â”€ Batch processing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -- Batch processing ---------------------------------------------------------
 
 def process_files(files: list[Path], hb: str,
                   chosen_sub: dict | None, chosen_aud: dict | None,
@@ -3428,7 +3555,7 @@ def process_files(files: list[Path], hb: str,
         out = output_path(video)
         print(f"\n{SEP_THIN}")
         print(f"{amber('[FILE]')} {white(str(video))}")
-        print(f"  {dim('â†’')} {cyan(str(out))}")
+        print(f"  {dim('→')} {cyan(str(out))}")
 
         if out.exists() and not force:
             print(yellow("  [SKIP] Output already exists. Use --force to overwrite."))
@@ -3493,7 +3620,7 @@ def process_files(files: list[Path], hb: str,
             # Sanity-check: output must exist and be larger than 1 MB
             out_size = out.stat().st_size if out.exists() else 0
             if out_size < 1_048_576:
-                print(red(f"  [FAIL] Output is suspiciously small ({out_size} bytes) â€” "
+                print(red(f"  [FAIL] Output is suspiciously small ({out_size} bytes) - "
                           f"treating as failed encode."))
                 failures.append(video)
                 if out.exists():
@@ -3518,14 +3645,14 @@ def process_files(files: list[Path], hb: str,
                     pass
 
 
-# â”€â”€ Cleanup â€” delete originals â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -- Cleanup - delete originals ------------------------------------------------
 
 def delete_originals(successes: list[Path],
                      dry_run: bool) -> tuple[list[Path], list[Path]]:
     deleted:       list[Path] = []
     failed_to_del: list[Path] = []
     print(f"\n{SEP_THICK}")
-    print(b_white("CLEANUP â€” Deleting originals"))
+    print(b_white("CLEANUP - Deleting originals"))
     print(SEP_THICK)
     for src_file in successes:
         out    = output_path(src_file)
@@ -3540,7 +3667,7 @@ def delete_originals(successes: list[Path],
             continue
         out_size = out.stat().st_size
         if out_size < 1_048_576:
-            print(f"{prefix}  {red('[SKIP]')} output is only {out_size:,} bytes â€” "
+            print(f"{prefix}  {red('[SKIP]')} output is only {out_size:,} bytes - "
                   f"suspiciously small, NOT deleting")
             failed_to_del.append(src_file)
             continue
@@ -3561,9 +3688,9 @@ def delete_originals(successes: list[Path],
     return deleted, failed_to_del
 
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 # ARGUMENT PARSER
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
@@ -3580,7 +3707,7 @@ Examples:
   python lito1.py --cleanup-files
 """,
     )
-    # â”€â”€ Fetcher flags â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- Fetcher flags -------------------------------------------------------
     p.add_argument("--pick-group",    action="store_true",
                    help="Prompt to choose sub group (default: auto-rank)")
     p.add_argument("--season",        type=int, default=None,
@@ -3619,13 +3746,13 @@ Examples:
     return p.parse_args()
 
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 # MAIN
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-# Per-season worker â€” called once per season in the main loop
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
+# Per-season worker - called once per season in the main loop
+# -----------------------------------------------------------------------------
 
 def run_one_season(
     season:           int,
@@ -3639,6 +3766,8 @@ def run_one_season(
     auto_confirm:     bool = False,
     force_no_batch:   bool = False,
     excluded_groups:  set[str] | None = None,
+    allowed_seasons:  set[int] | None = None,
+    season_info:      dict[int, dict] | None = None,
 ) -> bool:
     """
     Execute the full pipeline for a single season:
@@ -3648,27 +3777,29 @@ def run_one_season(
     """
     season_label = f"Season {season}"
     excluded_groups = excluded_groups or set()
+    season_info = season_info or fetch_anilist_season_info(anime_name)
 
     print(f"\n{SEP_HASH}")
-    print(magenta(f"  â–¶  {season_label}"))
+    print(magenta(f"  >  {season_label}"))
     print(SEP_HASH)
 
-    # â”€â”€ Ensure season has data in the pool â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- Ensure season has data in the pool ------------------------------------
     season_pool_for_rank = [r for r in raw
-                            if extract_season_number(r["title"]) == season]
+                            if get_result_season_number(r) == season]
 
     if not season_pool_for_rank:
-        print(f"  {c(C.WARN, f'Season {season} not in current pool â€” running targeted search ...')}")
-        extra = search_all_pages(build_season_query(anime_name, season), args.pages)
+        print(f"  {c(C.WARN, f'Season {season} not in current pool - running targeted search ...')}")
+        extra = search_all_pages(build_season_query(anime_name, season, season_info), args.pages)
+        annotate_results_with_anilist_seasons(extra, anime_name, season_info)
         seen  = {r["detail_url"] for r in raw}
         raw  += [r for r in extra if r["detail_url"] not in seen]
         season_pool_for_rank = [r for r in raw
-                                if extract_season_number(r["title"]) == season]
+                                if get_result_season_number(r) == season]
         if not season_pool_for_rank:
             print(c(C.WARN, f"  No results found for {season_label}. Skipping."))
-            return True   # non-fatal â€” just skip
+            return True   # non-fatal - just skip
 
-    # â”€â”€ Re-rank scoped to this season â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- Re-rank scoped to this season -----------------------------------------
     season_ranked = rank_sub_groups(season_pool_for_rank)
     if not season_ranked:
         print(c(C.WARN, f"  No rankable sub groups for {season_label}. Skipping."))
@@ -3680,12 +3811,12 @@ def run_one_season(
     # Check whether ANY preferred group appears in the results at all
     any_preferred_present = any(e["group"] in PREFERRED_GROUPS for e in season_ranked)
     if not any_preferred_present:
-        print(f"  {c(C.YELLOW, '[FALLBACK]')} No preferred groups found for this series â€” "
+        print(f"  {c(C.YELLOW, '[FALLBACK]')} No preferred groups found for this series - "
               f"scoring all available groups by composite metric.")
 
     for i, entry in enumerate(season_ranked[:top_n], 1):
         is_pref     = entry["group"] in PREFERRED_GROUPS
-        badge       = f" {c(C.BADGE, 'â˜…')}" if is_pref else ""
+        badge       = f" {c(C.BADGE, '*')}" if is_pref else ""
         grp         = entry["group"]
         cov_pct     = f"{entry['coverage_ratio']*100:.0f}%"
         completed_s = c(C.AMBER_B, str(entry['total_completed']))
@@ -3721,31 +3852,32 @@ def run_one_season(
             chosen_group, is_preferred, pick_reason = pick_best_group(season_ranked)
         if is_preferred:
             print(f"  {c(C.LABEL, 'Auto-selected:')} {c(C.VALUE, f'[{chosen_group}]')}  "
-                  f"{c(C.SUCCESS, 'â˜… preferred')}  {c(C.DIM, pick_reason)}")
+                  f"{c(C.SUCCESS, '* preferred')}  {c(C.DIM, pick_reason)}")
         else:
             print(f"  {c(C.LABEL, 'Auto-selected:')} {c(C.VALUE, f'[{chosen_group}]')}  "
-                  f"{c(C.YELLOW, 'â†³ fallback')}  {c(C.DIM, pick_reason)}")
-        log.info("Season %s group selected: [%s] preferred=%s â€” %s",
+                  f"{c(C.YELLOW, '-> fallback')}  {c(C.DIM, pick_reason)}")
+        log.info("Season %s group selected: [%s] preferred=%s - %s",
                  season, chosen_group, is_preferred, pick_reason)
 
-    # â”€â”€ Episode range â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- Episode range ---------------------------------------------------------
     episode_range: tuple[int, int] | None = None
     if args.episodes:
         parts = args.episodes.split("-")
         if len(parts) == 2 and all(p.isdigit() for p in parts):
             episode_range = (int(parts[0]), int(parts[1]))
 
-    # â”€â”€ Filter episodes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- Filter episodes ---------------------------------------------------------
     # Step 1: get what the primary chosen_group has for this season
     episodes = filter_episodes(raw, chosen_group, season, episode_range)
 
     if not episodes:
         # Fallback: re-search and re-rank for this season specifically
-        print(f"  {c(C.WARN, f'[{chosen_group}]: no individual episode torrents for {season_label} â€” re-searching (batch check will follow) ...')}")
-        season_raw   = search_all_pages(build_season_query(anime_name, season), args.pages)
+        print(f"  {c(C.WARN, f'[{chosen_group}]: no individual episode torrents for {season_label} - re-searching (batch check will follow) ...')}")
+        season_raw   = search_all_pages(build_season_query(anime_name, season, season_info), args.pages)
+        annotate_results_with_anilist_seasons(season_raw, anime_name, season_info)
         seen         = {r["detail_url"] for r in raw}
         raw         += [r for r in season_raw if r["detail_url"] not in seen]
-        season_pool2 = [r for r in raw if extract_season_number(r["title"]) == season]
+        season_pool2 = [r for r in raw if get_result_season_number(r) == season]
         season_ranked2 = rank_sub_groups(season_pool2)
         if season_ranked2:
             chosen_group, is_preferred, pick_reason = pick_best_group(season_ranked2)
@@ -3763,8 +3895,8 @@ def run_one_season(
     # available alternative rather than waiting for verify_episode_coverage to
     # discover them reactively.
     print()
-    divider(f"Checking Group Continuity â€” {season_label}")
-    pool_for_season = [r for r in raw if extract_season_number(r["title"]) == season]
+    divider(f"Checking Group Continuity - {season_label}")
+    pool_for_season = [r for r in raw if get_result_season_number(r) == season]
     episodes = detect_group_handoffs(
         pool_for_season, chosen_group, season, episode_range, season_ranked
     )
@@ -3772,7 +3904,7 @@ def run_one_season(
         # detect_group_handoffs returns [] only if pool_for_season is empty
         episodes = filter_episodes(raw, chosen_group, season, episode_range)
 
-    # â”€â”€ Batch torrent check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- Batch torrent check ---------------------------------------------------
     # Decision tree:
     #
     #   FINISHED series (AniList status != RELEASING):
@@ -3790,11 +3922,11 @@ def run_one_season(
     # A batch is CONFIRMED only when the nyaa detail page shows >= 2 video files,
     # protecting movies, standalone OVAs, and single-episode anime from ever
     # being routed through the batch path.
-    # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # --------------------------------------------------------------------------
     _batch_torrent: dict | None = None
     _using_batch   = False
 
-    _al_info   = fetch_anilist_season_info(anime_name)
+    _al_info   = season_info
     _sinfo     = _al_info.get(season, {})
     _is_airing = _sinfo.get("airing", False)
     _expected  = _sinfo.get("aired") or _sinfo.get("total")
@@ -3813,16 +3945,17 @@ def run_one_season(
 
     if _check_batch:
         print()
-        divider(f"Batch Check â€” {season_label}")
+        divider(f"Batch Check - {season_label}")
         if _coverage_thin:
             _why = ("no per-episode results" if _have == 0
                     else f"{_have}/{_expected} eps found (<75% coverage)")
             print(f"  {c(C.LABEL, 'Reason:')} {c(C.DIM, _why)}")
         else:
-            print(f"  {c(C.DIM, 'Series is finished â€” checking for a complete-pack ...')}")
+            print(f"  {c(C.DIM, 'Series is finished - checking for a complete-pack ...')}")
 
         _batch_torrent = find_best_batch_for_season(raw, season,
-                                                     prefer_group=chosen_group)
+                                                     prefer_group=chosen_group,
+                                                     allowed_seasons=allowed_seasons)
         if _batch_torrent:
             _btag        = extract_sub_group(_batch_torrent["title"]) or "?"
             _batch_score = _torrent_score(_batch_torrent)
@@ -3856,24 +3989,24 @@ def run_one_season(
                           f"{c(C.DIM, f'pool score {_per_ep_pool_score:.0f} > ')} "
                           f"{c(C.DIM, f'batch normalised {_batch_norm:.0f}')}")
         else:
-            print(f"  {c(C.DIM, 'No qualifying batch found â€” using per-episode results.')}")
+            print(f"  {c(C.DIM, 'No qualifying batch found - using per-episode results.')}")
 
-    # â”€â”€ AniList verification + gap fill  (skipped when using a batch) â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- AniList verification + gap fill  (skipped when using a batch) ---------
     if not _using_batch:
         episodes = verify_episode_coverage(
             episodes, anime_name, season, raw, chosen_group, args, episode_range
         )
 
-    # â”€â”€ Episode / batch plan display â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- Episode / batch plan display ------------------------------------------
     print()
     if _using_batch:
-        divider(f"Batch Plan â€” {season_label}")
+        divider(f"Batch Plan - {season_label}")
         _binfo = _batch_torrent["batch_info"]
         print(f"  {c(C.AMBER_B, 'Mode:')}   {c(C.VALUE, 'BATCH TORRENT')}  "
               f"{c(C.DIM, f"({_binfo['tv_count']} TV  +  {_binfo['special_count']} specials)")}")
         print_batch_info(_batch_torrent)
     else:
-        divider(f"Episode List â€” {season_label}")
+        divider(f"Episode List - {season_label}")
         print(f"  {c(C.LABEL, 'Primary group:')}  {c(C.VALUE, f'[{chosen_group}]')}   "
               f"{c(C.LABEL, 'Total:')}  {c(C.VALUE2, str(len(episodes)))}")
         print()
@@ -3894,7 +4027,7 @@ def run_one_season(
             ep_id   = c(C.ORANGE, f"S{ep_seas:02d}E{ep_num:>3}")
             seeds   = c(C.VALUE2, f"{ep.get('seeders', 0):>4}")
             leech   = c(C.CYAN_DIM, f"{ep.get('leechers', 0):>3}L")
-            dl      = c(C.AMBER_B, f"{ep.get('completed', 0):>5}â†“")
+            dl      = c(C.AMBER_B, f"{ep.get('completed', 0):>5}v")
             src_grp = ep.get("_source_group") or extract_sub_group(ep["title"]) or "?"
             grp_tag = (c(C.DIM,    f"[{src_grp}]") if src_grp == chosen_group
                        else c(C.YELLOW, f"[{src_grp}]"))
@@ -3907,7 +4040,7 @@ def run_one_season(
         print(c(C.WARN, f"  No episodes and no qualifying batch found for {season_label}. Skipping."))
         return True
 
-    # â”€â”€ Confirm â€” skipped in all-seasons mode (user already committed) â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- Confirm - skipped in all-seasons mode (user already committed) ---------
     if not args.no_confirm and not auto_confirm:
         print()
         mode_label = "batch torrent" if _using_batch else f"{len(episodes)} episode(s)"
@@ -3919,63 +4052,63 @@ def run_one_season(
             print(c(C.WARN, f"  Skipping {season_label}."))
             return True
 
-    # â”€â”€ Save path â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- Save path -------------------------------------------------------------
     print()
-    divider(f"qBittorrent â€” {season_label}")
+    divider(f"qBittorrent - {season_label}")
     save_path = build_save_path(jellyfin_anime_dir, anime_name, season)
     print(f"  {c(C.LABEL, 'Save path:')} {c(C.VALUE, save_path)}")
-    print(f"  {c(C.SUCCESS, 'âœ“')} {c(C.INFO_DIM, 'Directory created / verified.')}")
+    print(f"  {c(C.SUCCESS, '✓')} {c(C.INFO_DIM, 'Directory created / verified.')}")
 
-    # â”€â”€ Add torrent(s) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- Add torrent(s) --------------------------------------------------------
     monitor = CleanupMonitor(client, delete_files=delete_files)
     monitor.start()
 
     print()
-    divider(f"Adding Torrents â€” {season_label}")
+    divider(f"Adding Torrents - {season_label}")
     added, dl_failed = 0, 0
     deferred: list[tuple[str, str]] = []
 
-    # â”€â”€ Batch path: check disk state before touching qBittorrent â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- Batch path: check disk state before touching qBittorrent --------------
     # Resume logic: three states to detect so re-running the script is safe.
     #
-    #   State A â€” encode already finished:
-    #     Season 01 contains .hs.mkv files  â†’  skip everything, return True
+    #   State A - encode already finished:
+    #     Season 01 contains .hs.mkv files  ->  skip everything, return True
     #
-    #   State B â€” routing already finished (download done, encode not started):
-    #     Season 01 contains source .mkv files but no .hs.mkv  â†’  skip download
+    #   State B - routing already finished (download done, encode not started):
+    #     Season 01 contains source .mkv files but no .hs.mkv  ->  skip download
     #     and monitor, go straight to encode phase
     #
-    #   State C â€” download finished but routing not done:
-    #     _batch_staging/ contains .mkv files  â†’  skip qBittorrent, go straight
+    #   State C - download finished but routing not done:
+    #     _batch_staging/ contains .mkv files  ->  skip qBittorrent, go straight
     #     to post_process_batch_download then encode
     #
-    #   State D â€” fresh run:
-    #     Nothing on disk  â†’  normal qBittorrent add + monitor flow
-    # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    #   State D - fresh run:
+    #     Nothing on disk  ->  normal qBittorrent add + monitor flow
+    # -------------------------------------------------------------------------
     if _using_batch and _batch_torrent:
         series_dir    = Path(build_save_path(jellyfin_anime_dir, anime_name, season)).parent
         batch_staging = series_dir / "_batch_staging" / f"Season {(season or 1):02d}"
         season_tv_dir = series_dir / f"Season {(season or 1):02d}"
 
-        # â”€â”€ Integrity check helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # -- Integrity check helpers --------------------------------------------
         # We use a two-layer check rather than torrent piece hashes:
         #
-        #   1. File existence  â€” does the file exist at all?
-        #   2. Size proximity  â€” is it within 2% of the expected size from nyaa?
+        #   1. File existence  - does the file exist at all?
+        #   2. Size proximity  - is it within 2% of the expected size from nyaa?
         #
         # nyaa reports sizes in MiB rounded to one decimal place, so there is
         # inherent rounding error.  2% tolerance handles that comfortably while
         # still catching zero-byte partials, 1-KB incomplete downloads, and
         # files truncated mid-transfer.  A piece-hash check would be the only
         # more accurate option, but requires downloading and parsing the .torrent
-        # file â€” substantial extra complexity for marginal real-world gain.
+        # file - substantial extra complexity for marginal real-world gain.
         #
         # If batch_info is unavailable (detail page fetch failed), we fall back
         # to a 10 MB minimum-size heuristic so we are still protected against
         # zero-byte stubs even without expected sizes.
-        # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # ----------------------------------------------------------------------
 
-        _SIZE_TOLERANCE  = 0.02   # 2% â€” covers MiB rounding + filesystem metadata
+        _SIZE_TOLERANCE  = 0.02   # 2% - covers MiB rounding + filesystem metadata
         _MIN_VIDEO_BYTES = 10 * 1024 * 1024   # 10 MB fallback floor
 
         # Build a lookup: stem -> expected_bytes from batch_info (may be 0 if
@@ -4008,7 +4141,7 @@ def run_one_season(
                     log.debug("Size check FAIL %s: actual=%d expected=%d ratio=%.3f",
                               p.name, actual, expected, ratio)
                 return ok
-            # No expected size available â€” fall back to minimum floor
+            # No expected size available - fall back to minimum floor
             return actual >= _MIN_VIDEO_BYTES
 
         def _scan_dir(d: Path, require_hs: bool = False) -> tuple[int, int]:
@@ -4041,7 +4174,7 @@ def run_one_season(
         _stg_ok,  _stg_bad  = _scan_dir(batch_staging, require_hs=False)
 
         # Log the full picture for debugging
-        log.debug("Resume check â€” encoded: %d ok / %d bad | routed: %d ok / %d bad "
+        log.debug("Resume check - encoded: %d ok / %d bad | routed: %d ok / %d bad "
                   "| staging: %d ok / %d bad",
                   _enc_ok, _enc_bad, _raw_ok, _raw_bad, _stg_ok, _stg_bad)
 
@@ -4049,36 +4182,36 @@ def run_one_season(
         _bad_total = _enc_bad + _raw_bad + _stg_bad
         if _bad_total > 0:
             print(f"  {c(C.WARN, f'[WARN] {_bad_total} incomplete/zero-byte file(s) found on disk '
-                         f'(wrong size vs nyaa manifest) â€” will not be treated as complete.')}")
+                         f'(wrong size vs nyaa manifest) - will not be treated as complete.')}")
 
         _encoded_count = _enc_ok
         _routed_count  = _raw_ok
         _staging_count = _stg_ok
 
-        # â”€â”€ State A: encode already done â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # -- State A: encode already done --------------------------------------
         if _encoded_count > 0:
             print(f"  {c(C.SUCCESS, 'RESUME')}  {c(C.DIM, f'{_encoded_count} encoded file(s) already in')} "
-                  f"{c(C.VALUE, season_tv_dir.name)}  {c(C.DIM, 'â€” encode phase complete, skipping.')}")
+                  f"{c(C.VALUE, season_tv_dir.name)}  {c(C.DIM, '- encode phase complete, skipping.')}")
             log.info("Resume State A: %d encoded files found, skipping Season %s entirely",
                      _encoded_count, season)
             monitor.stop()
             return True
 
-        # â”€â”€ State B: routing done, encode not started â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # -- State B: routing done, encode not started --------------------------
         elif _routed_count > 0:
             print(f"  {c(C.SUCCESS, 'RESUME')}  {c(C.DIM, f'{_routed_count} source file(s) already routed to')} "
-                  f"{c(C.VALUE, season_tv_dir.name)}  {c(C.DIM, 'â€” skipping download, going to encode.')}")
+                  f"{c(C.VALUE, season_tv_dir.name)}  {c(C.DIM, '- skipping download, going to encode.')}")
             log.info("Resume State B: %d routed files found, skipping download for Season %s",
                      _routed_count, season)
             monitor.stop()
-            # Jump straight to encode â€” save_path already set correctly above
+            # Jump straight to encode - save_path already set correctly above
             save_path = str(season_tv_dir)
             # fall through to encode phase
 
-        # â”€â”€ State C: download done, routing not done â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # -- State C: download done, routing not done ---------------------------
         elif _staging_count > 0:
             print(f"  {c(C.SUCCESS, 'RESUME')}  {c(C.DIM, f'{_staging_count} file(s) found in staging')} "
-                  f"{c(C.DIM, 'â€” skipping download, running routing.')}")
+                  f"{c(C.DIM, '- skipping download, running routing.')}")
             log.info("Resume State C: %d staged files found, skipping download for Season %s",
                      _staging_count, season)
             monitor.stop()
@@ -4093,7 +4226,7 @@ def run_one_season(
             save_path = str(season_tv_dir)
             # fall through to encode phase
 
-        # â”€â”€ State D: fresh run â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # -- State D: fresh run -------------------------------------------------
         else:
             batch_staging.mkdir(parents=True, exist_ok=True)
             _pre_stage_files = _snapshot_files(batch_staging)
@@ -4200,6 +4333,8 @@ def run_one_season(
                     auto_confirm=True,
                     force_no_batch=True,
                     excluded_groups=_retry_excluded,
+                    allowed_seasons=allowed_seasons,
+                    season_info=season_info,
                 )
             else:
                 monitor.stop()
@@ -4220,7 +4355,7 @@ def run_one_season(
             )
             save_path = str(season_tv_dir)
 
-    # ---- PER-EPISODE PATH â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ---- PER-EPISODE PATH ----------------------------------------------------
     else:
         for ep in episodes:
             ep_num  = extract_episode_number(ep["title"])
@@ -4327,7 +4462,7 @@ def run_one_season(
     print(f"  {c(C.DIM, 'Subtitle normalize:')} "
           f"{c(C.SUCCESS, str(_norm.get('sub_renamed', 0)))} renamed, "
           f"{c(C.WARN if _norm.get('sub_skipped', 0) else C.DIM, str(_norm.get('sub_skipped', 0)) + ' skipped')}")
-    # â”€â”€ Update watch list â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- Update watch list -----------------------------------------------------
     # Re-query AniList to get current airing status for this season.
     # Uses the same data already fetched during verify_episode_coverage but
     # re-fetches here so run_one_season stays self-contained.
@@ -4351,7 +4486,7 @@ def run_one_season(
     except Exception as exc:
         print(f"  {c(C.DIM, f'Watch list update skipped ({exc})')}")
 
-    # â”€â”€ Jellyfin library rescan â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- Jellyfin library rescan -----------------------------------------------
     print()
     trigger_jellyfin_rescan(season_label)
 
@@ -4363,10 +4498,10 @@ def run_one_season(
     return True
 
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-# Watch list â€” tracks currently airing seasons for RSS polling
+# -----------------------------------------------------------------------------
+# Watch list - tracks currently airing seasons for RSS polling
 # Lives in the Jellyfin anime root dir, not next to the script
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 
 WATCHLIST_FILENAME = "anime_watchlist.json"
 
@@ -4398,13 +4533,13 @@ def rebuild_watchlist_from_disk(anime_dir: Path) -> None:
       - Disk is scanned to find the highest episode present
       - An entry is written for every season that is still airing
 
-    Seasons that AniList says are FINISHED are skipped â€” nothing to track.
+    Seasons that AniList says are FINISHED are skipped - nothing to track.
     Seasons where AniList cannot be reached get a warning entry so the user
     can review, but are not added to active polling.
     """
     print()
-    divider("Watch List â€” Rebuilding from Disk")
-    print(f"  {c(C.DIM, 'No watch list found â€” scanning library to reconstruct ...')}")
+    divider("Watch List - Rebuilding from Disk")
+    print(f"  {c(C.DIM, 'No watch list found - scanning library to reconstruct ...')}")
     print(f"  {c(C.DIM, str(anime_dir))}")
     print()
 
@@ -4454,7 +4589,7 @@ def rebuild_watchlist_from_disk(anime_dir: Path) -> None:
             total      = sinfo.get("total")
             aired      = sinfo.get("aired")
 
-            # Skip finished seasons â€” nothing to poll
+            # Skip finished seasons - nothing to poll
             if not is_airing:
                 continue
 
@@ -4502,7 +4637,7 @@ def rebuild_watchlist_from_disk(anime_dir: Path) -> None:
 
             ep_str = f"E{disk_highest}" if disk_highest else "no eps on disk"
             total_str = f"/{total}" if total else "/?"
-            print(f"  {c(C.SUCCESS, 'âœ“')} {c(C.VALUE, anime_name)} "
+            print(f"  {c(C.SUCCESS, '✓')} {c(C.VALUE, anime_name)} "
                   f"{c(C.ORANGE, f'S{season_num:02d}')}  "
                   f"{c(C.DIM, f'{ep_str}{total_str}')}  "
                   f"{c(C.VALUE2, f'[{group}]')}  "
@@ -4514,7 +4649,7 @@ def rebuild_watchlist_from_disk(anime_dir: Path) -> None:
     else:
         save_watchlist(anime_dir, entries)
         print()
-        print(f"  {c(C.SUCCESS, 'âœ“')} Watch list rebuilt â€” "
+        print(f"  {c(C.SUCCESS, '✓')} Watch list rebuilt - "
               f"{c(C.VALUE2, str(found_airing))} airing season(s) registered.")
         print(f"  {c(C.DIM, str(watchlist_path(anime_dir)))}")
 
@@ -4531,7 +4666,7 @@ def rebuild_watchlist_from_disk(anime_dir: Path) -> None:
 
 def save_watchlist(anime_dir: Path, entries: list[dict]) -> None:
     """
-    Write the watch list to disk. Silently warns on failure â€” never raises.
+    Write the watch list to disk. Silently warns on failure - never raises.
     A failed write is logged but never stops the pipeline.
     """
     try:
@@ -4539,7 +4674,7 @@ def save_watchlist(anime_dir: Path, entries: list[dict]) -> None:
         path.write_text(json.dumps(entries, indent=2, ensure_ascii=False), encoding="utf-8")
     except Exception as exc:
         print(f"  {yellow('[WARN]')} Could not save watch list: {exc}")
-        print(f"  {c(C.DIM, 'Continuing â€” watch list update will need to be performed manually.')}")
+        print(f"  {c(C.DIM, 'Continuing - watch list update will need to be performed manually.')}")
 
 
 def upsert_watch_entry(
@@ -4558,7 +4693,7 @@ def upsert_watch_entry(
     Marks the entry completed if last_episode >= total_episodes.
     """
     if not is_airing:
-        # Finished show â€” remove entry if it exists (it's done)
+        # Finished show - remove entry if it exists (it's done)
         entries = load_watchlist(anime_dir)
         entries = [e for e in entries
                    if not (e["anime_name"] == anime_name and e["season"] == season)]
@@ -4591,7 +4726,7 @@ def upsert_watch_entry(
     if existing is None:
         entry["added"] = datetime.date.today().isoformat()
         entries.append(entry)
-        print(f"  {c(C.SUCCESS, 'âœ“')} Watch list: added "
+        print(f"  {c(C.SUCCESS, '✓')} Watch list: added "
               f"{c(C.VALUE, anime_name)} Season {season} "
               f"{c(C.DIM, f'({anime_dir / WATCHLIST_FILENAME})')}")
     else:
@@ -4599,9 +4734,9 @@ def upsert_watch_entry(
         entries = [e if not (e["anime_name"] == anime_name and e["season"] == season)
                    else entry for e in entries]
         if completed:
-            print(f"  {c(C.SUCCESS, 'âœ“')} Watch list: Season {season} marked complete.")
+            print(f"  {c(C.SUCCESS, '✓')} Watch list: Season {season} marked complete.")
         else:
-            print(f"  {c(C.DIM, f'Watch list updated â€” last ep: E{last_episode}')}")
+            print(f"  {c(C.DIM, f'Watch list updated - last ep: E{last_episode}')}")
 
     save_watchlist(anime_dir, entries)
 
@@ -4637,14 +4772,14 @@ def poll_rss_for_entry(entry: dict) -> list[dict]:
     """
     Fetch the RSS feed for a watch entry and return ONE torrent per new episode.
 
-    Resolution preference: 1080p â†’ 720p â†’ 480p (or whatever is highest available).
+    Resolution preference: 1080p -> 720p -> 480p (or whatever is highest available).
     Within the same resolution, the torrent with the most seeders+leechers wins.
     Uses nyaa:seeders / nyaa:leechers / nyaa:infoHash namespace fields from the feed.
     """
     import xml.etree.ElementTree as ET
 
     NYAA_NS   = "https://nyaa.si/xmlns/nyaa"
-    RES_ORDER = ["1080p", "720p", "480p", "360p"]   # preference high â†’ low
+    RES_ORDER = ["1080p", "720p", "480p", "360p"]   # preference high -> low
 
     def _res(title: str) -> str:
         """Extract resolution string from title, e.g. '1080p'."""
@@ -4679,29 +4814,29 @@ def poll_rss_for_entry(entry: dict) -> list[dict]:
             if not title:
                 continue
 
-            # â”€â”€ Group filter â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            # -- Group filter --------------------------------------------------
             grp = extract_sub_group(title)
             if grp and grp != entry["group"].lower():
                 continue
 
-            # â”€â”€ Season filter â€” skip if season tag mismatches â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            # -- Season filter - skip if season tag mismatches -----------------
             ep_season = extract_season_number(title)
             if ep_season != entry["season"]:
                 continue
 
-            # â”€â”€ Episode number â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            # -- Episode number ------------------------------------------------
             ep = extract_episode_number(title)
             if ep is None or ep <= entry["last_episode"]:
                 continue
 
-            # â”€â”€ Torrent URL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            # -- Torrent URL ---------------------------------------------------
             link        = item.findtext("link") or ""
             enc         = item.find("enclosure")
             torrent_url = (enc.get("url") if enc is not None else None) or link
             if torrent_url and not torrent_url.endswith(".torrent"):
                 torrent_url = torrent_url.replace("/view/", "/download/") + ".torrent"
 
-            # â”€â”€ Nyaa namespace fields (seeders, leechers, infoHash) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            # -- Nyaa namespace fields (seeders, leechers, infoHash) -----------
             def _nyaa(tag: str) -> str:
                 return (item.findtext(f"{{{NYAA_NS}}}{tag}") or "").strip()
 
@@ -4717,7 +4852,7 @@ def poll_rss_for_entry(entry: dict) -> list[dict]:
 
             resolution = _res(title)
 
-            # Parse pubDate â€” RSS format: "Thu, 27 Feb 2026 14:30:00 +0000"
+            # Parse pubDate - RSS format: "Thu, 27 Feb 2026 14:30:00 +0000"
             pub_date_raw = (item.findtext("pubDate") or "").strip()
             try:
                 from email.utils import parsedate_to_datetime
@@ -4743,7 +4878,7 @@ def poll_rss_for_entry(entry: dict) -> list[dict]:
         if not candidates:
             return []
 
-        # â”€â”€ Per-episode: pick best resolution then highest popularity â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # -- Per-episode: pick best resolution then highest popularity ---------
         chosen: list[dict] = []
         for ep in sorted(candidates):
             options = candidates[ep]
@@ -4761,7 +4896,7 @@ def poll_rss_for_entry(entry: dict) -> list[dict]:
                 seeds  = winner["seeders"]
                 leech  = winner["leechers"]
                 wtitle = winner["title"][:45]
-                print(f"  {c(C.DIM, f'E{ep:>3}: {len(options)} releases â€” '
+                print(f"  {c(C.DIM, f'E{ep:>3}: {len(options)} releases - '
                       f'{best_res} [{seeds}S/{leech}L] {wtitle}')}")
 
         return chosen
@@ -4780,7 +4915,7 @@ def run_watch_mode(args: argparse.Namespace, anime_dir: Path) -> None:
     active  = [e for e in entries if not e.get("completed")]
 
     print()
-    divider("Watch Mode â€” Polling RSS")
+    divider("Watch Mode - Polling RSS")
 
     if not active:
         print(f"  {c(C.DIM, 'No active watch entries.')}")
@@ -4803,10 +4938,10 @@ def run_watch_mode(args: argparse.Namespace, anime_dir: Path) -> None:
     any_new = False
     for entry in active:
         print()
-        divider(f"{entry['anime_name']} â€” Season {entry['season']}")
+        divider(f"{entry['anime_name']} - Season {entry['season']}")
         print(f"  {c(C.LABEL, 'Group:')}        {c(C.VALUE, f'[{entry["group"]}]')}")
 
-        # â”€â”€ Show metadata card from AniList â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # -- Show metadata card from AniList -----------------------------------
         try:
             _sinfo = fetch_anilist_season_info(entry["anime_name"])
             _smeta = _sinfo.get(entry["season"], {})
@@ -4818,7 +4953,7 @@ def run_watch_mode(args: argparse.Namespace, anime_dir: Path) -> None:
         ep_total = (f"{entry['total_episodes']}" if entry.get("total_episodes")
                     else "unknown")
         print(f"  {c(C.LABEL, 'Total eps:')}    {c(C.VALUE2, ep_total)}")
-        # â”€â”€ Filesystem scan â€” source of truth â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # -- Filesystem scan - source of truth ---------------------------------
         # Always check disk before trusting the JSON last_episode value.
         # Files may have been manually added, deleted, or JSON may be stale.
         on_disk      = scan_episodes_on_disk(entry["save_path"])
@@ -4838,13 +4973,13 @@ def run_watch_mode(args: argparse.Namespace, anime_dir: Path) -> None:
         effective_last = max(disk_highest, json_highest)
         if disk_highest > json_highest:
             print(f"  {c(C.AMBER, '[SYNC]')} Disk has E{disk_highest}, "
-                  f"JSON said E{json_highest} â€” updating JSON to match disk.")
+                  f"JSON said E{json_highest} - updating JSON to match disk.")
             entry["last_episode"] = disk_highest
             entry["updated"]      = datetime.date.today().isoformat()
             save_watchlist(anime_dir, entries)
         elif json_highest > disk_highest and disk_highest > 0:
             print(f"  {c(C.YELLOW, '[SYNC]')} JSON said E{json_highest} "
-                  f"but only E{disk_highest} on disk â€” resetting to disk state.")
+                  f"but only E{disk_highest} on disk - resetting to disk state.")
             entry["last_episode"] = disk_highest
             entry["updated"]      = datetime.date.today().isoformat()
             save_watchlist(anime_dir, entries)
@@ -4861,7 +4996,7 @@ def run_watch_mode(args: argparse.Namespace, anime_dir: Path) -> None:
 
         new_eps = poll_rss_for_entry(polling_entry)
         if not new_eps:
-            print(f"  {c(C.SUCCESS, 'âœ“')} No new episodes.")
+            print(f"  {c(C.SUCCESS, '✓')} No new episodes.")
             continue
 
         new_eps.sort(key=lambda r: r["episode_num"])
@@ -4890,15 +5025,15 @@ def run_watch_mode(args: argparse.Namespace, anime_dir: Path) -> None:
                                         category=QBIT_CATEGORY)
                 if info_hash and info_hash != "__lookup__":
                     monitor.watch(info_hash, label)
-                    print(f"  {c(C.SUCCESS, 'âœ“')} {c(C.ORANGE, label)}  "
+                    print(f"  {c(C.SUCCESS, '✓')} {c(C.ORANGE, label)}  "
                           f"{c(C.CYAN_DIM, info_hash)}")
                     added += 1
                 elif info_hash == "__lookup__":
-                    print(f"  {c(C.SUCCESS, 'âœ“')} {c(C.ORANGE, label)}  "
+                    print(f"  {c(C.SUCCESS, '✓')} {c(C.ORANGE, label)}  "
                           f"{c(C.INFO_DIM, '(hash pending)')}")
                     added += 1
             except Exception as exc:
-                print(f"  {c(C.WARN, 'âœ—')} {c(C.ORANGE, label)}  {c(C.WARN, str(exc))}")
+                print(f"  {c(C.WARN, 'X')} {c(C.ORANGE, label)}  {c(C.WARN, str(exc))}")
 
         if added == 0:
             monitor.stop()
@@ -4932,19 +5067,19 @@ def run_watch_mode(args: argparse.Namespace, anime_dir: Path) -> None:
         if (entry.get("total_episodes") and
                 entry["last_episode"] >= entry["total_episodes"]):
             entry["completed"] = True
-            print(f"  {c(C.SUCCESS, 'âœ“')} Season complete â€” removing from active watch.")
+            print(f"  {c(C.SUCCESS, '✓')} Season complete - removing from active watch.")
         save_watchlist(anime_dir, entries)
 
         trigger_jellyfin_rescan(season_label)
 
     if not any_new:
         print()
-        print(f"  {c(C.SUCCESS, 'âœ“')} All entries up to date â€” nothing to download.")
+        print(f"  {c(C.SUCCESS, '✓')} All entries up to date - nothing to download.")
 
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 # Jellyfin library rescan
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -----------------------------------------------------------------------------
 
 _JELLY_CONFIG_FILE = Path(__file__).with_name("lito1_jellyfin.json")
 
@@ -4954,13 +5089,13 @@ def load_jellyfin_config() -> dict | None:
     Load Jellyfin connection details from lito1_jellyfin.json.
 
     Returns a config dict if the file exists and contains a valid URL + API key.
-    Returns None silently in all other cases â€” missing file, opted-out, malformed.
+    Returns None silently in all other cases - missing file, opted-out, malformed.
 
     To set up Jellyfin integration, run:
         python lito1.py --setup-jellyfin
     """
     if not _JELLY_CONFIG_FILE.exists():
-        return None   # not configured â€” silently skip, no prompt
+        return None   # not configured - silently skip, no prompt
     try:
         cfg = json.loads(_JELLY_CONFIG_FILE.read_text(encoding="utf-8"))
         if cfg.get("skip"):
@@ -4986,7 +5121,7 @@ def _validate_jellyfin_url(url: str) -> tuple[bool, str]:
     if not re.match(r"^https?://", url, re.IGNORECASE):
         return False, "URL must start with http:// or https://"
 
-    # Must include a port number â€” Jellyfin default is 8096
+    # Must include a port number - Jellyfin default is 8096
     if not re.search(r":\d{2,5}$", url):
         return False, "URL must include a port number (e.g. :8096)"
 
@@ -4995,13 +5130,13 @@ def _validate_jellyfin_url(url: str) -> tuple[bool, str]:
     if port_match:
         port = int(port_match.group(1))
         if not (1 <= port <= 65535):
-            return False, f"Port {port} is out of valid range (1â€“65535)"
+            return False, f"Port {port} is out of valid range (1-65535)"
 
     # Should not have a path component beyond the root
     from urllib.parse import urlparse
     parsed = urlparse(url)
     if parsed.path and parsed.path != "/":
-        # Strip any accidental path â€” Jellyfin always runs at the root
+        # Strip any accidental path - Jellyfin always runs at the root
         url = f"{parsed.scheme}://{parsed.netloc}"
 
     return True, url
@@ -5016,14 +5151,14 @@ def test_jellyfin_connectivity(url: str, api_key: str) -> tuple[bool, str]:
         "Authorization": f'MediaBrowser Token="{api_key}"',
         "Content-Type":  "application/json",
     }
-    # /System/Info/Public doesn't require auth â€” confirms the server is up
-    # /System/Info requires auth â€” confirms the API key is valid
+    # /System/Info/Public doesn't require auth - confirms the server is up
+    # /System/Info requires auth - confirms the API key is valid
     try:
         # Step 1: confirm server is reachable at all
         pub_resp = requests.get(f"{url}/System/Info/Public",
                                 headers=headers, timeout=8)
         if pub_resp.status_code == 404:
-            return False, "Server responded but /System/Info/Public not found â€” is this a Jellyfin server?"
+            return False, "Server responded but /System/Info/Public not found - is this a Jellyfin server?"
         if pub_resp.status_code not in (200, 401):
             return False, f"Unexpected response from server: HTTP {pub_resp.status_code}"
 
@@ -5031,7 +5166,7 @@ def test_jellyfin_connectivity(url: str, api_key: str) -> tuple[bool, str]:
         auth_resp = requests.get(f"{url}/System/Info",
                                  headers=headers, timeout=8)
         if auth_resp.status_code == 401:
-            return False, "Server is reachable but API key was rejected â€” check the key in Jellyfin Dashboard â†’ API Keys"
+            return False, "Server is reachable but API key was rejected - check the key in Jellyfin Dashboard -> API Keys"
         if auth_resp.status_code == 200:
             info = auth_resp.json()
             server_name = info.get("ServerName", "Jellyfin")
@@ -5041,9 +5176,9 @@ def test_jellyfin_connectivity(url: str, api_key: str) -> tuple[bool, str]:
         return False, f"Auth check returned HTTP {auth_resp.status_code}"
 
     except requests.exceptions.ConnectionError:
-        return False, f"Connection refused â€” is Jellyfin running at {url}?"
+        return False, f"Connection refused - is Jellyfin running at {url}?"
     except requests.exceptions.Timeout:
-        return False, f"Connection timed out â€” server did not respond within 8s"
+        return False, f"Connection timed out - server did not respond within 8s"
     except Exception as exc:
         return False, f"Unexpected error: {exc}"
 
@@ -5054,7 +5189,7 @@ def show_jellyfin_startup_status(prompt_on_failure: bool = True) -> None:
     if _jcfg:
         _jok, _jmsg = test_jellyfin_connectivity(_jcfg["url"], _jcfg["api_key"])
         if _jok:
-            print(f"  {c(C.SUCCESS, 'âœ“')} Jellyfin: {_jmsg}")
+            print(f"  {c(C.SUCCESS, '✓')} Jellyfin: {_jmsg}")
             return
 
         print(f"  {yellow('[WARN]')} Jellyfin unreachable: {_jmsg}")
@@ -5083,13 +5218,13 @@ def setup_jellyfin_config() -> None:
     Called only when --setup-jellyfin is passed.
     """
     print()
-    divider("Jellyfin â€” Setup")
+    divider("Jellyfin - Setup")
     print(f"  {c(C.DIM, 'Config will be saved to:')} {c(C.VALUE, str(_JELLY_CONFIG_FILE))}")
-    print(f"  {c(C.DIM, 'Get your API key: Jellyfin â†’ Dashboard â†’ API Keys â†’ + Add')}")
+    print(f"  {c(C.DIM, 'Get your API key: Jellyfin -> Dashboard -> API Keys -> + Add')}")
     print(f"  {c(C.DIM, 'Leave URL blank to disable/clear Jellyfin rescan.')}")
     print()
 
-    # â”€â”€ URL input + validation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- URL input + validation ------------------------------------------------
     while True:
         raw_url = input(
             f"  {c(C.PROMPT_CLR, 'Jellyfin URL')} "
@@ -5099,9 +5234,9 @@ def setup_jellyfin_config() -> None:
         if not raw_url:
             if _JELLY_CONFIG_FILE.exists():
                 _JELLY_CONFIG_FILE.unlink()
-                print(f"  {c(C.DIM, 'Jellyfin config removed â€” rescan will be skipped.')}")
+                print(f"  {c(C.DIM, 'Jellyfin config removed - rescan will be skipped.')}")
             else:
-                print(f"  {c(C.DIM, 'No URL entered â€” Jellyfin rescan remains disabled.')}")
+                print(f"  {c(C.DIM, 'No URL entered - Jellyfin rescan remains disabled.')}")
             return
 
         valid, result = _validate_jellyfin_url(raw_url)
@@ -5115,33 +5250,33 @@ def setup_jellyfin_config() -> None:
             print(f"  {c(C.DIM, f'URL normalised to: {url}')}")
         break
 
-    # â”€â”€ API key input â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- API key input ---------------------------------------------------------
     api_key = input(f"  {c(C.PROMPT_CLR, 'API Key')} : ").strip()
     if not api_key:
-        print(f"  {yellow('[WARN]')} No API key entered â€” setup cancelled.")
+        print(f"  {yellow('[WARN]')} No API key entered - setup cancelled.")
         return
 
-    # â”€â”€ Connectivity test â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- Connectivity test -----------------------------------------------------
     print()
     print(f"  {c(C.DIM, f'Testing connection to {url} ...')}")
     ok, message = test_jellyfin_connectivity(url, api_key)
     if ok:
-        print(f"  {c(C.SUCCESS, 'âœ“')} {message}")
+        print(f"  {c(C.SUCCESS, '✓')} {message}")
     else:
-        print(f"  {c(C.WARN, 'âœ—')} {message}")
+        print(f"  {c(C.WARN, 'X')} {message}")
         print()
         retry = input(
             f"  {c(C.PROMPT_CLR, 'Save anyway?')} "
             f"{c(C.DIM, '[y/N]')} : "
         ).strip().lower()
         if retry != "y":
-            print(f"  {c(C.DIM, 'Setup cancelled â€” config not saved.')}")
+            print(f"  {c(C.DIM, 'Setup cancelled - config not saved.')}")
             return
 
-    # â”€â”€ Save â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- Save ------------------------------------------------------------------
     cfg = {"url": url, "api_key": api_key, "skip": False}
     _JELLY_CONFIG_FILE.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
-    print(f"  {c(C.SUCCESS, 'âœ“')} Saved to {c(C.VALUE, _JELLY_CONFIG_FILE.name)}")
+    print(f"  {c(C.SUCCESS, '✓')} Saved to {c(C.VALUE, _JELLY_CONFIG_FILE.name)}")
     print(f"  {c(C.DIM, 'Jellyfin rescan will now run automatically after each completed download batch.')}")
 
 
@@ -5155,7 +5290,7 @@ def trigger_jellyfin_rescan(season_label: str) -> None:
       1. Authenticates with the stored API key.
       2. Queries /Library/VirtualFolders to resolve the ItemId of the Anime
          virtual library (matched by the folder that contains our media).
-      3. POSTs to /Items/{ItemId}/Refresh â€” rescanning only that library.
+      3. POSTs to /Items/{ItemId}/Refresh - rescanning only that library.
       4. Falls back to the global endpoint if VirtualFolders lookup fails.
 
     Never raises; degrades gracefully with a user-visible warning on failure.
@@ -5165,7 +5300,7 @@ def trigger_jellyfin_rescan(season_label: str) -> None:
         if not cfg:
             return
 
-        # Use the URL exactly as configured â€” Jellyfin is often on a different
+        # Use the URL exactly as configured - Jellyfin is often on a different
         # machine on the LAN, so never substitute localhost.
         base_url = cfg["url"]
 
@@ -5175,7 +5310,7 @@ def trigger_jellyfin_rescan(season_label: str) -> None:
             "Content-Type":  "application/json",
         }
 
-        # â”€â”€ Step 1: resolve target library ItemId via VirtualFolders â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # -- Step 1: resolve target library ItemId via VirtualFolders ----------
         target_item_id: str | None = None
         try:
             vf_resp = requests.get(
@@ -5190,7 +5325,7 @@ def trigger_jellyfin_rescan(season_label: str) -> None:
                     folder_name = (folder.get("Name") or "").lower()
                     if "anime" in folder_name:
                         target_item_id = folder.get("ItemId")
-                        log.info("Jellyfin: matched library %r â†’ ItemId %s",
+                        log.info("Jellyfin: matched library %r -> ItemId %s",
                                  folder.get("Name"), target_item_id)
                         break
             else:
@@ -5199,7 +5334,7 @@ def trigger_jellyfin_rescan(season_label: str) -> None:
         except Exception as vf_exc:
             log.warning("Jellyfin VirtualFolders lookup failed: %s", vf_exc)
 
-        # â”€â”€ Step 2: targeted item refresh â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # -- Step 2: targeted item refresh -------------------------------------
         if target_item_id:
             resp = requests.post(
                 f"{base_url}/Items/{target_item_id}/Refresh",
@@ -5214,51 +5349,51 @@ def trigger_jellyfin_rescan(season_label: str) -> None:
                 timeout=15,
             )
             if resp.status_code in (200, 204):
-                _jf_sep = c(C.GREEN, "  " + "â”€" * 50)
+                _jf_sep = c(C.GREEN, "  " + "-" * 50)
                 print()
                 print(_jf_sep)
-                print(f"  {c(C.GREEN, 'âœ“  JELLYFIN LIBRARY SCAN TRIGGERED')}")
+                print(f"  {c(C.GREEN, 'OK  JELLYFIN LIBRARY SCAN TRIGGERED')}")
                 print(f"     {c(C.WHITE, season_label)}"
-                      f"  {c(C.DIM, f'Â· ItemId {target_item_id}')}")
+                      f"  {c(C.DIM, f' |  ItemId {target_item_id}')}")
                 print(_jf_sep)
                 print()
                 log.info("Jellyfin targeted refresh OK for ItemId=%s", target_item_id)
                 return
             elif resp.status_code == 400:
-                log.warning("Jellyfin /Items/%s/Refresh â†’ HTTP 400: %s",
+                log.warning("Jellyfin /Items/%s/Refresh -> HTTP 400: %s",
                             target_item_id, resp.text[:200])
                 # Fall through to global refresh
         else:
             log.info("Jellyfin: no matching anime library found, falling back to global refresh")
 
-        # â”€â”€ Step 3: fallback â€” global refresh (still beats no scan at all) â”€â”€â”€â”€
+        # -- Step 3: fallback - global refresh (still beats no scan at all) ----
         resp = requests.post(
             f"{base_url}/Library/Refresh",
             headers=headers,
             timeout=10,
         )
         if resp.status_code in (200, 204):
-            _jf_sep = c(C.GREEN, "  " + "â”€" * 50)
+            _jf_sep = c(C.GREEN, "  " + "-" * 50)
             print()
             print(_jf_sep)
-            print(f"  {c(C.GREEN, 'âœ“  JELLYFIN LIBRARY SCAN TRIGGERED')}"
+            print(f"  {c(C.GREEN, 'OK  JELLYFIN LIBRARY SCAN TRIGGERED')}"
                   f"  {c(C.DIM, '(global fallback)')}")
             print(f"     {c(C.WHITE, season_label)}")
             print(_jf_sep)
             print()
             log.info("Jellyfin global refresh fallback OK")
         else:
-            print(f"\n  {yellow('[WARN]')} Jellyfin rescan returned HTTP {resp.status_code} â€” "
+            print(f"\n  {yellow('[WARN]')} Jellyfin rescan returned HTTP {resp.status_code} - "
                   f"please trigger a library scan manually in Jellyfin.\n")
             log.warning("Jellyfin rescan HTTP %d", resp.status_code)
 
     except requests.exceptions.ConnectionError:
         print(f"\n  {yellow('[WARN]')} Could not reach Jellyfin "
-              f"{c(C.DIM, '(connection refused)')} â€” "
+              f"{c(C.DIM, '(connection refused)')} - "
               f"please trigger a library scan manually.\n")
         log.warning("Jellyfin connection refused")
     except Exception as exc:
-        print(f"\n  {yellow('[WARN]')} Jellyfin rescan skipped ({exc}) â€” "
+        print(f"\n  {yellow('[WARN]')} Jellyfin rescan skipped ({exc}) - "
               f"please trigger a library scan manually.\n")
         log.exception("Jellyfin rescan unexpected error")
 
@@ -5270,12 +5405,12 @@ def main() -> None:
     VISUAL_THEME = getattr(args, "theme", "clean")
     apply_visual_theme(VISUAL_THEME)
 
-    # â”€â”€ Jellyfin setup mode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- Jellyfin setup mode ---------------------------------------------------
     if args.setup_jellyfin:
         setup_jellyfin_config()
         finish_run(any_failure=False, exit_code=0)
 
-    # â”€â”€ Watch status / watch mode â€” need anime dir first â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- Watch status / watch mode - need anime dir first ---------------------
     if args.watch or args.watch_status:
         jellyfin_anime_dir = find_jellyfin_anime_dir()
         show_jellyfin_startup_status(prompt_on_failure=True)
@@ -5289,46 +5424,46 @@ def main() -> None:
             run_watch_mode(args, jellyfin_anime_dir)
             finish_run(any_failure=False, exit_code=0)
 
-    # â”€â”€ Banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- Banner ----------------------------------------------------------------
     width     = 64
-    title_str = "lito1  |  Nyaa -> qBittorrent -> Jellyfin"
+    title_str = "Anime Pipeline  |  Nyaa → qBittorrent → Jellyfin"
     pad       = (width - len(title_str)) // 2
-    print(c(C.AMBER, "â•" * width))
-    print(c(C.AMBER, "â•‘") +
+    print(c(C.AMBER, "═" * width))
+    print(c(C.AMBER, "║") +
           c(C.BANNER, " " * pad + title_str +
             " " * (width - pad - len(title_str) - 2)) +
-          c(C.AMBER, "â•‘"))
-    print(c(C.AMBER, "â•" * width))
+          c(C.AMBER, "║"))
+    print(c(C.AMBER, "═" * width))
     if VISUAL_FUN:
         print(f"  {magenta('[FUN]')} {dim(random.choice(FUN_ORACLE_LINES))}")
     print(f"  {dim('Theme:')} {amber(VISUAL_THEME)}")
 
     if not _ANITOPY_AVAILABLE:
-        print(f"\n  {yellow('[WARN]')} anitopy not installed â€” using regex fallback for title parsing.")
+        print(f"\n  {yellow('[WARN]')} anitopy not installed - using regex fallback for title parsing.")
         if _GUESSIT_AVAILABLE:
-            print(f"  {green('[INFO]')} guessit detected â€” will be used as secondary parser.")
+            print(f"  {green('[INFO]')} guessit detected - will be used as secondary parser.")
         else:
             print(f"  {c(C.DIM, 'For best results: pip install anitopy guessit')}\n")
     else:
         if _GUESSIT_AVAILABLE:
             print(f"  {dim('[INFO]')} anitopy + guessit both available (anitopy primary).")
 
-    log.info("Pipeline startup â€” anitopy=%s guessit=%s config_toml=%s",
+    log.info("Pipeline startup - anitopy=%s guessit=%s config_toml=%s",
              _ANITOPY_AVAILABLE, _GUESSIT_AVAILABLE, _CONFIG_FILE.exists())
 
-    # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    # PHASE 1 â€” Locate Jellyfin Anime directory
-    # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -------------------------------------------------------------------------
+    # PHASE 1 - Locate Jellyfin Anime directory
+    # -------------------------------------------------------------------------
     jellyfin_anime_dir = find_jellyfin_anime_dir()
 
-    # â”€â”€ Jellyfin connectivity check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- Jellyfin connectivity check -------------------------------------------
     # Quick ping at startup so connectivity problems surface immediately rather
     # than silently failing hours later at the end of an encode run.
     _jcfg = load_jellyfin_config()
     if _jcfg:
         _jok, _jmsg = test_jellyfin_connectivity(_jcfg["url"], _jcfg["api_key"])
         if _jok:
-            print(f"  {c(C.SUCCESS, 'âœ“')} Jellyfin: {_jmsg}")
+            print(f"  {c(C.SUCCESS, '✓')} Jellyfin: {_jmsg}")
         else:
             print(f"  {yellow('[WARN]')} Jellyfin unreachable: {_jmsg}")
             print(f"  {c(C.DIM, 'The pipeline will run normally but library rescan will be skipped.')}")
@@ -5347,19 +5482,19 @@ def main() -> None:
     if not watchlist_path(jellyfin_anime_dir).exists() or not load_watchlist(jellyfin_anime_dir):
         rebuild_watchlist_from_disk(jellyfin_anime_dir)
 
-    # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    # PHASE 2 â€” Nyaa search + qBittorrent
-    # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -------------------------------------------------------------------------
+    # PHASE 2 - Nyaa search + qBittorrent
+    # -------------------------------------------------------------------------
     print(f"\n{SEP_THICK}")
-    print(b_white("PHASE 2 â€” Nyaa Search + qBittorrent"))
+    print(b_white("PHASE 2 - Nyaa Search + qBittorrent"))
     print(SEP_THICK)
 
-    # â”€â”€ Inputs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- Inputs ---------------------------------------------------------------
     anime_name = prompt("Anime series name")
     if not anime_name:
         sys.exit(red("[ERROR] No anime title provided."))
 
-    # Normalise capitalisation for directory display â€” title-case the input
+    # Normalise capitalisation for directory display - title-case the input
     # so "isekai quartet" becomes "Isekai Quartet", but preserve already-cased
     # input like "Re:ZERO" (only apply if the input is entirely lower-case).
     if anime_name == anime_name.lower():
@@ -5374,7 +5509,7 @@ def main() -> None:
         print(yellow("[WARN] --cleanup-files is enabled; completed media files will be removed by qBittorrent."))
         print(yellow("[WARN] Disable this unless your qBittorrent path is temporary."))
 
-    # â”€â”€ Broad nyaa search â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- Broad nyaa search ----------------------------------------------------
     print()
     divider("Searching Nyaa.si")
     print(f"  {c(C.LABEL, 'Query:')} {c(C.VALUE, anime_name)}  "
@@ -5386,27 +5521,32 @@ def main() -> None:
     if not raw:
         sys.exit(c(C.WARN, "\n[ERROR] No results found. Try a different title."))
 
-    # â”€â”€ Rank sub groups â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- Rank sub groups -------------------------------------------------------
     ranked = rank_sub_groups(raw)
     if not ranked:
         sys.exit(c(C.WARN, "[ERROR] Could not identify any sub groups in results."))
 
-    # â”€â”€ Season discovery â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- Season discovery ------------------------------------------------------
+    season_info = annotate_results_with_anilist_seasons(raw, anime_name)
     season_map: dict[int, set] = {}
+    season_inferred_map: dict[int, bool] = {}
     for r in raw:
-        s = extract_season_number(r["title"])
+        s = get_result_season_number(r)
         e = extract_episode_number(r["title"])
         if e is not None:
             season_map.setdefault(s, set()).add(e)
+            season_inferred_map[s] = season_inferred_map.get(s, False) or bool(r.get("_season_inferred"))
 
     print()
     divider("Available Seasons")
     for s in sorted(season_map):
+        inferred_suffix = f" {c(C.DIM, '(AniList alias inference)')}" if season_inferred_map.get(s) else ""
         print(f"  {c(C.AMBER_B, f'Season {s}')}"
-              f"{c(C.AMBER, '  â€”  ')}"
-              f"{c(C.VALUE2, str(len(season_map[s])))} episode(s)")
+              f"{c(C.AMBER, '  -  ')}"
+              f"{c(C.VALUE2, str(len(season_map[s])))} episode(s)"
+              f"{inferred_suffix}")
 
-    # â”€â”€ Season selection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- Season selection ------------------------------------------------------
     print()
     available_season_nums = sorted(season_map.keys())
     avail_str = ", ".join(str(s) for s in available_season_nums)
@@ -5418,18 +5558,18 @@ def main() -> None:
     else:
         print(f"  {c(C.DIM, 'Available: ')} {c(C.AMBER_B, avail_str)}")
         print(f"  {c(C.DIM, 'Syntax   : ')} "
-              f"{c(C.WHITE_DIM, '2        â†’ single season')}")
+              f"{c(C.WHITE_DIM, '2        -> single season')}")
         print(f"  {c(C.DIM, '           ')} "
-              f"{c(C.WHITE_DIM, '2,4      â†’ seasons 2 and 4 only')}")
+              f"{c(C.WHITE_DIM, '2,4      -> seasons 2 and 4 only')}")
         print(f"  {c(C.DIM, '           ')} "
-              f"{c(C.WHITE_DIM, '2-4      â†’ seasons 2 through 4')}")
+              f"{c(C.WHITE_DIM, '2-4      -> seasons 2 through 4')}")
         print(f"  {c(C.DIM, '           ')} "
-              f"{c(C.WHITE_DIM, 'Enter    â†’ all seasons')}")
+              f"{c(C.WHITE_DIM, 'Enter    -> all seasons')}")
         print()
         season_str = prompt("Season(s)", "").strip()
 
         if not season_str:
-            # blank â†’ all seasons
+            # blank -> all seasons
             seasons_to_run   = available_season_nums
             all_seasons_mode = True
 
@@ -5439,7 +5579,7 @@ def main() -> None:
             missing = [s for s in parsed if s not in season_map]
             if missing:
                 print(f"  {yellow('[WARN]')} Season(s) not found in search results: "
-                      f"{c(C.AMBER_B, ', '.join(str(s) for s in missing))} â€” "
+                      f"{c(C.AMBER_B, ', '.join(str(s) for s in missing))} - "
                       f"will attempt targeted search per season.")
             seasons_to_run   = parsed
             all_seasons_mode = False
@@ -5455,7 +5595,7 @@ def main() -> None:
             missing = [s for s in seasons_to_run if s not in season_map]
             if missing:
                 print(f"  {yellow('[WARN]')} Season(s) not found in search results: "
-                      f"{c(C.AMBER_B, ', '.join(str(s) for s in missing))} â€” "
+                      f"{c(C.AMBER_B, ', '.join(str(s) for s in missing))} - "
                       f"will attempt targeted search per season.")
 
         elif season_str.isdigit():
@@ -5464,7 +5604,7 @@ def main() -> None:
             all_seasons_mode = False
 
         else:
-            print(f"  {yellow('[WARN]')} Could not parse {c(C.AMBER_B, repr(season_str))} â€” "
+            print(f"  {yellow('[WARN]')} Could not parse {c(C.AMBER_B, repr(season_str))} - "
                   f"defaulting to all seasons.")
             seasons_to_run   = available_season_nums
             all_seasons_mode = True
@@ -5484,24 +5624,26 @@ def main() -> None:
     signal.signal(signal.SIGINT, _on_sigint)
 
 
-    # â”€â”€ Season loop â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- Season loop -----------------------------------------------------------
     any_failure = False
     for season in seasons_to_run:
         ok = run_one_season(
             season, raw, ranked, anime_name, args,
             jellyfin_anime_dir, client, delete_files,
             auto_confirm=all_seasons_mode,
+            allowed_seasons=set(seasons_to_run),
+            season_info=season_info,
         )
         if not ok:
             any_failure = True
 
     finish_run(any_failure=any_failure, exit_code=(1 if any_failure else 0))
 
-    # â”€â”€ Final banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -- Final banner ----------------------------------------------------------
     print()
-    print(c(C.AMBER, "â•" * 64))
+    print(c(C.AMBER, "=" * 64))
     print_completion_banner(any_failure)
-    print(c(C.AMBER, "â•" * 64))
+    print(c(C.AMBER, "=" * 64))
     print()
     print_visual_footer(any_failure)
     sys.exit(1 if any_failure else 0)
@@ -5509,6 +5651,7 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
 
 
 
