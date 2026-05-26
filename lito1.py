@@ -769,6 +769,11 @@ def _collect_torrent_leaf_entries(node, parents: list[str] | None = None) -> lis
       "[Judas] Gintama S05 - Gintama'/[Judas] Gintama - 202.mkv(1.2 GiB)"
     """
     parents = parents or []
+    if getattr(node, "name", None) != "ul":
+        top_ul = node.find("ul")
+        if top_ul is None:
+            return []
+        node = top_ul
     entries: list[str] = []
     for li in node.find_all("li", recursive=False):
         child_ul = li.find("ul", recursive=False)
