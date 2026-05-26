@@ -1433,6 +1433,58 @@ def _batch_title_matches_series_family(
     return False
 
 
+def enrich_season_map_from_batch_candidates(
+    results: list[dict],
+    anime_name: str,
+    season_info: dict[int, dict] | None = None,
+    inspect_limit: int = 3,
+) -> tuple[dict[int, set[int]], list[str]]:
+    """
+    Inspect a small number of high-value batch candidates and extract explicit
+    season/episode structure from their file lists.
+
+    This is especially useful for long franchises where torrent collectors use
+    clear S01/S02/... naming that is more actionable for file routing than
+    AniList/MAL's sequel graph.
+    """
+    candidates = [
+        r for r in results
+        if r.get("batch_candidate")
+        and _batch_title_matches_series_family(r["title"], anime_name, season_info)
+    ]
+    if not candidates:
+        return {}, []
+
+    def _priority(r: dict) -> tuple[float, int, int]:
+        return (-_torrent_score(r), -r.get("completed", 0), -r.get("seeders", 0))
+
+    enriched: dict[int, set[int]] = {}
+    inspected_titles: list[str] = []
+
+    for r in sorted(candidates, key=_priority)[:inspect_limit]:
+        if not inspect_batch_candidate(r):
+            continue
+        info = r.get("batch_info") or {}
+        seasons_present = info.get("seasons_present") or []
+        if len(seasons_present) < 2:
+            continue
+        tv_eps = info.get("tv_episodes") or []
+        season_buckets: dict[int, set[int]] = defaultdict(set)
+        for f in tv_eps:
+            sn = f.get("season_num")
+            ep = f.get("ep_num")
+            if sn is None or ep is None:
+                continue
+            season_buckets[int(sn)].add(int(ep))
+        if len(season_buckets) < 2:
+            continue
+        for sn, eps in season_buckets.items():
+            enriched.setdefault(sn, set()).update(eps)
+        inspected_titles.append(r["title"])
+
+    return enriched, inspected_titles
+
+
 def infer_anilist_season_number(title: str, anime_name: str, season_info: dict[int, dict] | None) -> int:
     explicit = extract_explicit_season_number(title)
     if explicit is not None:
@@ -5630,18 +5682,30 @@ def main() -> None:
             continue
         season_map[s] = eps
 
+    batch_season_map, inspected_batches = enrich_season_map_from_batch_candidates(
+        raw, anime_name, season_info
+    )
+    batch_only_seasons: set[int] = set()
+    for s, eps in sorted(batch_season_map.items()):
+        if s not in season_map:
+            batch_only_seasons.add(s)
+        season_map.setdefault(s, set()).update(eps)
+
     print()
     divider("Available Seasons")
     for s in sorted(season_map):
         inferred_suffix = f" {c(C.DIM, '(AniList alias inference)')}" if season_inferred_map.get(s) else ""
+        batch_suffix = f" {c(C.DIM, '(batch file list)')}" if s in batch_only_seasons else ""
         print(f"  {c(C.AMBER_B, f'Season {s}')}"
               f"{c(C.AMBER, '  -  ')}"
               f"{c(C.VALUE2, str(len(season_map[s])))} episode(s)"
-              f"{inferred_suffix}")
+              f"{inferred_suffix}{batch_suffix}")
     if suppressed_inferred:
         sup = ", ".join(f"S{s:02d}" for s in suppressed_inferred)
         print(f"\n  {c(C.DIM, '[Info]')} {c(C.DIM, 'Suppressed low-confidence inferred seasons:')} "
               f"{c(C.MUTED, sup)}")
+    if inspected_batches:
+        print(f"  {c(C.DIM, '[Info]')} {c(C.DIM, 'Season map enriched from batch file list inspection.')}")
 
     # -- Season selection ------------------------------------------------------
     print()
