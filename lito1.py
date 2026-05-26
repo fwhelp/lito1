@@ -761,6 +761,41 @@ def _is_batch_title(title: str, size_str: str = "") -> bool:
 _DETAIL_CACHE: dict[str, list[str]] = {}
 
 
+def _collect_torrent_leaf_entries(node, parents: list[str] | None = None) -> list[str]:
+    """
+    Walk Nyaa's nested torrent file tree and preserve relative folder paths.
+
+    Example output:
+      "[Judas] Gintama S05 - Gintama'/[Judas] Gintama - 202.mkv(1.2 GiB)"
+    """
+    parents = parents or []
+    entries: list[str] = []
+    for li in node.find_all("li", recursive=False):
+        child_ul = li.find("ul", recursive=False)
+        text = li.get_text(" ", strip=True)
+        if child_ul:
+            label_parts = []
+            for child in li.contents:
+                if child == child_ul:
+                    break
+                part = getattr(child, "get_text", lambda *a, **k: str(child))(" ", strip=True)
+                part = str(part).strip()
+                if part:
+                    label_parts.append(part)
+            folder_name = " ".join(label_parts).strip().rstrip("/").strip()
+            next_parents = parents + ([folder_name] if folder_name else [])
+            entries.extend(_collect_torrent_leaf_entries(child_ul, next_parents))
+            continue
+
+        if not text or text.endswith("/"):
+            continue
+        if "." not in text:
+            continue
+        rel_path = "/".join([*parents, text]) if parents else text
+        entries.append(rel_path)
+    return entries
+
+
 def fetch_batch_file_list(detail_url: str) -> list[str]:
     """
     Scrape the nyaa detail page and return every filename in the torrent.
@@ -787,20 +822,7 @@ def fetch_batch_file_list(detail_url: str) -> list[str]:
         container = soup.select_one(".torrent-file-list")
         if not container:
             return []
-        entries: list[str] = []
-        for li in container.find_all("li"):
-            # Skip folder nodes - they contain a nested <ul> whose get_text()
-            # would concatenate ALL children into one giant blob like:
-            # "Encore[GS] file1.mkv(610 MiB)[GS] file2.mkv(538 MiB)..."
-            # Only leaf <li> elements (no nested <ul>) are actual files.
-            if li.find("ul"):
-                continue
-            text = li.get_text(strip=True)
-            if not text or text.endswith("/"):
-                continue
-            # Keep the raw text including the "(123.4 MiB)" annotation.
-            if "." in text:
-                entries.append(text)
+        entries = _collect_torrent_leaf_entries(container)
         _DETAIL_CACHE[detail_url] = entries
         log.debug("fetch_batch_file_list: %d entries at %s", len(entries), detail_url)
         return entries
@@ -889,8 +911,10 @@ def _classify_batch_file(filename: str) -> dict:
       all others -> Season 00 (Specials)
     """
     filename, expected_bytes = _split_filename_and_size(filename)
-    stem     = Path(filename).stem
-    ext      = Path(filename).suffix.lower()
+    rel_path = Path(filename)
+    base_name = rel_path.name
+    stem     = Path(base_name).stem
+    ext      = Path(base_name).suffix.lower()
     is_video = ext in _VIDEO_EXT
 
     if _OVA_PAT.search(stem):
@@ -920,9 +944,13 @@ def _classify_batch_file(filename: str) -> dict:
 
     # Also extract the season number from the filename so multi-season batches
     # (e.g. "Season 1+2" packs) can be routed to the correct season directory.
-    season_num = extract_season_number(filename)   # None if no S-tag found
+    # We intentionally inspect the preserved relative path, not just the leaf
+    # filename, so folder names like "[Judas] Gintama S05 - Gintama'" count.
+    season_num = extract_explicit_season_number(filename)
+    if season_num is None:
+        season_num = extract_explicit_season_number(base_name)
 
-    return {"filename": filename, "expected_bytes": expected_bytes,
+    return {"filename": base_name, "relative_path": filename, "expected_bytes": expected_bytes,
             "is_video": is_video, "category": category,
             "ep_num": ep_num, "season_num": season_num}
 
@@ -1175,7 +1203,14 @@ def post_process_batch_download(
             continue
 
         # Find the file on disk (may be inside a subdirectory of download_dir)
-        candidates = list(download_dir.rglob(file_info["filename"]))
+        rel_path = file_info.get("relative_path") or file_info["filename"]
+        rel_path_norm = Path(str(rel_path).replace("/", os.sep))
+        candidates = []
+        rel_candidate = download_dir / rel_path_norm
+        if rel_candidate.exists():
+            candidates = [rel_candidate]
+        if not candidates:
+            candidates = list(download_dir.rglob(file_info["filename"]))
         if not candidates:
             stem = Path(file_info["filename"]).stem
             candidates = [
