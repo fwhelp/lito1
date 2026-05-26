@@ -1046,9 +1046,11 @@ def print_batch_info(result: dict, tv_season: int = 1) -> None:
 
 def find_best_batch_for_season(
     results:      list[dict],
+    anime_name:   str,
     season:       int | None,
     prefer_group: str = "",
     allowed_seasons: set[int] | None = None,
+    season_info:  dict[int, dict] | None = None,
 ) -> dict | None:
     """
     Search *results* for the best batch torrent for *season*.
@@ -1082,6 +1084,9 @@ def find_best_batch_for_season(
 
     for r in candidates:
         print(f"  {c(C.DIM, 'Inspecting batch candidate:')} {c(C.MUTED, r['title'][:60])}")
+        if not _batch_title_matches_series_family(r["title"], anime_name, season_info):
+            print(f"  {c(C.WARN, '[SKIP]')} {c(C.DIM, 'batch title looks like a spinoff / unrelated side entry')}")
+            continue
         if inspect_batch_candidate(r):
             if allowed_seasons is not None:
                 _binfo = r.get("batch_info") or {}
@@ -1354,6 +1359,78 @@ def extract_explicit_season_number(title: str) -> int | None:
     if m:
         return int(m.group(1))
     return None
+
+
+def _inferred_season_confident(
+    season_num: int,
+    episodes_found: set[int],
+    season_info: dict[int, dict] | None,
+) -> bool:
+    """
+    Gate inferred seasons behind enough evidence to avoid one-off false positives.
+
+    This keeps broad franchise searches like "Gintama" from surfacing synthetic
+    seasons based on a single movie/spinoff/special hit that happened to share
+    a title fragment with a sequel alias.
+    """
+    ep_count = len(episodes_found)
+    if ep_count >= 3:
+        return True
+    total = ((season_info or {}).get(season_num) or {}).get("total")
+    if not total:
+        return False
+    return ep_count >= max(2, min(6, math.ceil(total * 0.25)))
+
+
+def _batch_title_matches_series_family(
+    title: str,
+    anime_name: str,
+    season_info: dict[int, dict] | None = None,
+) -> bool:
+    """
+    Reject obvious spinoff packs during main-series batch selection.
+
+    We allow generic batch descriptors after the matched alias, but reject
+    titles that introduce a large unrelated subtitle payload such as
+    "Ginpachi-sensei" when the user searched for "Gintama".
+    """
+    title_norm = _normalize_title_for_match(title)
+    aliases = [anime_name]
+    for sinfo in (season_info or {}).values():
+        aliases.extend(sinfo.get("titles") or [])
+
+    seen: set[str] = set()
+    alias_norms: list[str] = []
+    for alias in aliases:
+        alias_norm = _normalize_title_for_match(alias)
+        if not alias_norm or alias_norm in seen:
+            continue
+        seen.add(alias_norm)
+        alias_norms.append(alias_norm)
+    alias_norms.sort(key=len, reverse=True)
+
+    generic_tokens = {
+        "batch", "bd", "bdrip", "bluray", "dvd", "remux", "complete",
+        "collection", "season", "seasons", "part", "cour", "tv", "movie",
+        "movies", "special", "specials", "ova", "ovas", "ona", "oad",
+        "sp", "episode", "episodes", "ep", "uncensored", "uncut", "dual",
+        "audio", "multi", "subs", "sub", "dub", "hevc", "x264", "x265",
+        "10bit", "8bit", "aac", "flac", "opus", "v2", "v3",
+    }
+
+    for alias_norm in alias_norms:
+        if alias_norm not in title_norm:
+            continue
+        remainder = re.sub(rf"\b{re.escape(alias_norm)}\b", " ", title_norm, count=1)
+        leftover = [
+            tok for tok in remainder.split()
+            if not tok.isdigit()
+            and not re.fullmatch(r"s\d{1,2}|e\d{1,3}|[sp]\d{1,3}|v\d+", tok, re.IGNORECASE)
+            and tok not in generic_tokens
+        ]
+        if len(leftover) <= 3:
+            return True
+    return False
 
 
 def infer_anilist_season_number(title: str, anime_name: str, season_info: dict[int, dict] | None) -> int:
@@ -1808,6 +1885,7 @@ query ($search: String) {
   Page(page: 1, perPage: 5) {
     media(search: $search, type: ANIME, sort: SEARCH_MATCH) {
       id
+      format
       title { romaji english native }
       synonyms
       episodes
@@ -1823,6 +1901,7 @@ query ($search: String) {
           relationType
           node {
             id
+            format
             title { romaji english native }
             synonyms
             episodes
@@ -1912,6 +1991,7 @@ def fetch_anilist_season_info(anime_name: str) -> dict[int, dict]:
                 "total":   total,
                 "aired":   aired,
                 "airing":  airing,
+                "format":  node.get("format") or "",
                 "score":   score,
                 "genres":  genres,
                 "season":  season,
@@ -1926,8 +2006,11 @@ def fetch_anilist_season_info(anime_name: str) -> dict[int, dict]:
 
         for edge in best.get("relations", {}).get("edges", []):
             if edge.get("relationType") == "SEQUEL":
+                node = edge.get("node") or {}
+                if (node.get("format") or "").upper() not in ("TV", "TV_SHORT"):
+                    continue
                 season_num += 1
-                seasons[season_num] = _entry_info(edge["node"])
+                seasons[season_num] = _entry_info(node)
 
         return seasons
     except Exception:
@@ -3953,9 +4036,10 @@ def run_one_season(
         else:
             print(f"  {c(C.DIM, 'Series is finished - checking for a complete-pack ...')}")
 
-        _batch_torrent = find_best_batch_for_season(raw, season,
+        _batch_torrent = find_best_batch_for_season(raw, anime_name, season,
                                                      prefer_group=chosen_group,
-                                                     allowed_seasons=allowed_seasons)
+                                                     allowed_seasons=allowed_seasons,
+                                                     season_info=season_info)
         if _batch_torrent:
             _btag        = extract_sub_group(_batch_torrent["title"]) or "?"
             _batch_score = _torrent_score(_batch_torrent)
@@ -5528,14 +5612,23 @@ def main() -> None:
 
     # -- Season discovery ------------------------------------------------------
     season_info = annotate_results_with_anilist_seasons(raw, anime_name)
-    season_map: dict[int, set] = {}
+    raw_season_map: dict[int, set] = {}
     season_inferred_map: dict[int, bool] = {}
     for r in raw:
         s = get_result_season_number(r)
         e = extract_episode_number(r["title"])
         if e is not None:
-            season_map.setdefault(s, set()).add(e)
+            raw_season_map.setdefault(s, set()).add(e)
             season_inferred_map[s] = season_inferred_map.get(s, False) or bool(r.get("_season_inferred"))
+
+    season_map: dict[int, set] = {}
+    suppressed_inferred: list[int] = []
+    for s, eps in sorted(raw_season_map.items()):
+        inferred = season_inferred_map.get(s, False)
+        if inferred and not _inferred_season_confident(s, eps, season_info):
+            suppressed_inferred.append(s)
+            continue
+        season_map[s] = eps
 
     print()
     divider("Available Seasons")
@@ -5545,6 +5638,10 @@ def main() -> None:
               f"{c(C.AMBER, '  -  ')}"
               f"{c(C.VALUE2, str(len(season_map[s])))} episode(s)"
               f"{inferred_suffix}")
+    if suppressed_inferred:
+        sup = ", ".join(f"S{s:02d}" for s in suppressed_inferred)
+        print(f"\n  {c(C.DIM, '[Info]')} {c(C.DIM, 'Suppressed low-confidence inferred seasons:')} "
+              f"{c(C.MUTED, sup)}")
 
     # -- Season selection ------------------------------------------------------
     print()
