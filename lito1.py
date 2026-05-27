@@ -130,6 +130,7 @@ QBIT_CATEGORY = _cfg("qbittorrent", "category", "anime")
 NYAA_BASE        = _cfg("nyaa", "base_url", "https://nyaa.si")
 MONITOR_INTERVAL = _cfg("nyaa", "monitor_interval", 30)
 STUCK_NO_PROGRESS_SECS = int(_cfg("nyaa", "stuck_no_progress_secs", 900))
+STUCK_EPISODE_RETRY_LIMIT = int(_cfg("nyaa", "stuck_episode_retry_limit", 2))
 DEFAULT_PAGES    = _cfg("nyaa", "default_pages", 15)
 
 DONE_STATES = {
@@ -1969,6 +1970,55 @@ def filter_episodes_any_group(
     return [ep_candidates[ep] for ep in sorted(ep_candidates)]
 
 
+def select_retry_episode_result(
+    results: list[dict],
+    season: int,
+    ep_num: int,
+    excluded_groups: set[str] | None = None,
+    excluded_detail_urls: set[str] | None = None,
+) -> tuple[dict | None, str]:
+    """
+    Pick a replacement torrent candidate for one stuck episode.
+
+    Prefer a different group first. If none exists, fall back to any other
+    release for the same episode that uses a different detail page.
+    """
+    excluded_groups = excluded_groups or set()
+    excluded_detail_urls = excluded_detail_urls or set()
+
+    pool = [
+        r for r in results
+        if get_result_season_number(r) == season
+        and extract_episode_number(r["title"]) == ep_num
+        and r.get("detail_url") not in excluded_detail_urls
+    ]
+    if not pool:
+        return None, "no matching torrents found for this episode"
+
+    alt_groups = [r for r in pool if (extract_sub_group(r["title"]) or "") not in excluded_groups]
+    candidate_pool = alt_groups or pool
+
+    def _key(r: dict) -> tuple[int, int, float, int]:
+        grp = extract_sub_group(r["title"]) or ""
+        live = (r.get("seeders", 0) > 0 or r.get("leechers", 0) > 0)
+        pref = grp in PREFERRED_GROUPS
+        return (
+            0 if live else 1,
+            0 if pref else 1,
+            -_torrent_score(r),
+            -int(r.get("completed", 0)),
+        )
+
+    best = min(candidate_pool, key=_key)
+    grp = extract_sub_group(best["title"]) or "unknown"
+    reason = (
+        "switched to a different group for this episode"
+        if grp not in excluded_groups else
+        "reused same group with a different release candidate"
+    )
+    return best, reason
+
+
 
 # -- AniList episode-count verification ---------------------------------------
 
@@ -2666,6 +2716,10 @@ class CleanupMonitor:
     def watched_snapshot(self) -> dict[str, str]:
         with self._lock:
             return dict(self._watched)
+
+    def unwatch(self, info_hash: str) -> None:
+        with self._lock:
+            self._watched.pop(info_hash.lower(), None)
 
     def _run(self) -> None:
         mode = "torrent + files" if self.delete_files else "torrent entry only"
@@ -4535,21 +4589,35 @@ def run_one_season(
 
     # ---- PER-EPISODE PATH ----------------------------------------------------
     else:
+        episode_retry_meta: dict[str, dict] = {}
+        pending_label_meta: dict[str, dict] = {}
+
         for ep in episodes:
             ep_num  = extract_episode_number(ep["title"])
             ep_seas = extract_season_number(ep["title"])
             label   = f"S{ep_seas:02d}E{ep_num:>3}"
+            grp     = extract_sub_group(ep["title"]) or ""
+            meta = {
+                "label": label,
+                "season": ep_seas,
+                "ep_num": ep_num,
+                "excluded_groups": ({grp} if grp else set()),
+                "excluded_detail_urls": ({ep.get("detail_url")} if ep.get("detail_url") else set()),
+                "retry_count": 0,
+            }
             try:
                 info_hash = add_torrent(client, ep,
                                         save_path=save_path,
                                         category=QBIT_CATEGORY)
                 if info_hash == "__lookup__":
                     deferred.append((ep["title"], label))
+                    pending_label_meta[label] = meta
                     print(f"  {c(C.SUCCESS, '\u2713')} {c(C.ORANGE, label)}  "
                           f"{c(C.INFO_DIM, '(hash lookup pending)')}")
                     added += 1
                 elif info_hash:
                     monitor.watch(info_hash, label)
+                    episode_retry_meta[info_hash.lower()] = meta
                     print(f"  {c(C.SUCCESS, '\u2713')} {c(C.ORANGE, label)}  "
                           f"{c(C.CYAN_DIM, info_hash)}")
                     added += 1
@@ -4567,6 +4635,20 @@ def run_one_season(
                 h = resolve_hash_for_title(client, nyaa_title)
                 if h:
                     monitor.watch(h, label)
+                    _meta = pending_label_meta.get(label)
+                    if _meta is None:
+                        _m = re.search(r"S(\d{2})E\s*(\d{1,3})", label)
+                        if _m:
+                            _meta = {
+                                "label": label,
+                                "season": int(_m.group(1)),
+                                "ep_num": int(_m.group(2)),
+                                "excluded_groups": set(),
+                                "excluded_detail_urls": set(),
+                                "retry_count": 0,
+                            }
+                    if _meta is not None:
+                        episode_retry_meta[h.lower()] = _meta
                     print(f"  {c(C.SUCCESS, '\u2713')} {c(C.ORANGE, label)} \u2192 {c(C.CYAN_DIM, h)}")
                 else:
                     print(f"  {c(C.WARN, '\u2717')} {c(C.ORANGE, label)} \u2014 hash not resolved")
@@ -4590,9 +4672,91 @@ def run_one_season(
               f"{c(C.AMBER, 'to stop monitoring (downloads continue in qBittorrent).')}")
         print()
 
+        dead_labels: list[str] = []
         try:
             while monitor.pending_count() > 0:
-                time.sleep(5)
+                stuck = wait_for_downloads_or_stuck(
+                    client=client,
+                    monitor=monitor,
+                    no_progress_secs=STUCK_NO_PROGRESS_SECS,
+                    poll_secs=5,
+                )
+                if not stuck.get("stuck"):
+                    break
+
+                stuck_hash = str(stuck.get("hash", "")).lower()
+                stuck_label = stuck.get("label", "episode")
+                stuck_state = stuck.get("state", "unknown")
+                stuck_prog = float(stuck.get("progress", 0.0)) * 100.0
+                idle_s = int(stuck.get("idle_for", 0))
+                meta = episode_retry_meta.pop(stuck_hash, None)
+
+                print()
+                print(f"  {c(C.WARN, '[STUCK]')} "
+                      f"{c(C.ORANGE, stuck_label)} {c(C.DIM, f'state={stuck_state} progress={stuck_prog:.1f}%')} "
+                      f"{c(C.DIM, f'no movement for {idle_s}s')}")
+
+                try:
+                    client.torrents_delete(delete_files=True, torrent_hashes=stuck_hash)
+                except Exception:
+                    log.exception("Failed to delete stuck episode torrent %s", stuck_hash)
+                monitor.unwatch(stuck_hash)
+
+                if not meta:
+                    dead_labels.append(stuck_label)
+                    print(f"  {c(C.WARN, '[DEAD]')} {c(C.DIM, 'No retry metadata for this torrent; leaving episode missing for now.')}")
+                    continue
+
+                if meta["retry_count"] >= STUCK_EPISODE_RETRY_LIMIT:
+                    dead_labels.append(stuck_label)
+                    print(f"  {c(C.WARN, '[DEAD]')} {c(C.DIM, f'retry limit reached ({STUCK_EPISODE_RETRY_LIMIT}) - leaving this episode for manual follow-up.')}")
+                    continue
+
+                retry_item, retry_reason = select_retry_episode_result(
+                    raw,
+                    season=meta["season"],
+                    ep_num=meta["ep_num"],
+                    excluded_groups=set(meta["excluded_groups"]),
+                    excluded_detail_urls=set(meta["excluded_detail_urls"]),
+                )
+                if not retry_item:
+                    dead_labels.append(stuck_label)
+                    print(f"  {c(C.WARN, '[DEAD]')} {c(C.DIM, retry_reason)}")
+                    continue
+
+                retry_grp = extract_sub_group(retry_item["title"]) or ""
+                if retry_grp:
+                    meta["excluded_groups"].add(retry_grp)
+                if retry_item.get("detail_url"):
+                    meta["excluded_detail_urls"].add(retry_item["detail_url"])
+                meta["retry_count"] += 1
+
+                print(f"  {c(C.DIM, 'Retrying:')} {c(C.VALUE, retry_reason)} "
+                      f"{c(C.DIM, '->')} {c(C.VALUE, '[' + retry_grp + ']') if retry_grp else c(C.DIM, '[unknown]')}")
+
+                try:
+                    retry_hash = add_torrent(client, retry_item,
+                                             save_path=save_path,
+                                             category=QBIT_CATEGORY)
+                    if retry_hash == "__lookup__":
+                        resolved = resolve_hash_for_title(client, retry_item["title"])
+                        if resolved:
+                            retry_hash = resolved
+                        else:
+                            dead_labels.append(stuck_label)
+                            print(f"  {c(C.WARN, '[DEAD]')} {c(C.DIM, 'Retry hash could not be resolved.')}")
+                            continue
+                    if retry_hash:
+                        monitor.watch(retry_hash, meta["label"])
+                        episode_retry_meta[retry_hash.lower()] = meta
+                        print(f"  {c(C.SUCCESS, '\u2713')} {c(C.ORANGE, meta['label'])} "
+                              f"{c(C.DIM, 'retry added')} {c(C.CYAN_DIM, retry_hash)}")
+                    else:
+                        dead_labels.append(stuck_label)
+                        print(f"  {c(C.WARN, '[DEAD]')} {c(C.DIM, 'Retry candidate had no usable URL.')}")
+                except Exception as exc:
+                    dead_labels.append(stuck_label)
+                    print(f"  {c(C.WARN, '[DEAD]')} {c(C.DIM, f'Retry add failed: {exc}')}")
         except KeyboardInterrupt:
             pass
 
@@ -4603,6 +4767,9 @@ def run_one_season(
             divider(f"Cleaned Up \u2014 {season_label}")
             for lbl in monitor.cleaned:
                 print(f"  {c(C.SUCCESS, '\u2713')} {c(C.ORANGE, lbl)}")
+        if dead_labels:
+            print(f"  {c(C.WARN, 'Dead torrents:')} "
+                  f"{c(C.WARN, ', '.join(dead_labels))}")
 
         # Per-episode OVA / Special reclassification
         _sp_dir    = Path(build_save_path(jellyfin_anime_dir, anime_name, season)).parent / "Season 00"
