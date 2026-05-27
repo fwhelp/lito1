@@ -943,7 +943,9 @@ def _classify_batch_file(filename: str) -> dict:
     # resolutions (1080), and hash codes when finding the episode number.
     # Fall back to the first bare number only if anitopy returns nothing.
     m = _EP_NUM_PAT.search(stem)
-    ep_num = extract_episode_number(filename)
+    ep_num = extract_episode_number(base_name)
+    if ep_num is None:
+        ep_num = extract_episode_number(filename)
     if ep_num is None:
         ep_num = int(m.group(1)) if m else None
 
@@ -1635,7 +1637,7 @@ def rank_sub_groups(results: list[dict]) -> list[dict]:
     if not group_score:
         return []
 
-    max_coverage = max(len(eps) for eps in group_episodes.values()) or 1
+    max_coverage = max((len(eps) for eps in group_episodes.values()), default=0) or 1
     ranked = []
     for group, total_ts in group_score.items():
         ep_count       = len(group_episodes[group])
