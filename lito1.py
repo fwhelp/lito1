@@ -4078,6 +4078,15 @@ def run_one_season(
             ""
         )) >= 720
     }
+    batch_priority_summaries: list[str] = []
+    for grp in sorted(batch_only_priority_groups):
+        sample_title = next(
+            (r["title"] for r in season_pool_for_rank if extract_sub_group(r["title"]) == grp),
+            "",
+        )
+        res = _title_resolution_rank(sample_title)
+        seeders = next((e["total_seeders"] for e in season_ranked if e["group"] == grp), 0)
+        batch_priority_summaries.append(f"[{grp}] {res}p {seeders}S")
 
     for i, entry in enumerate(season_ranked[:top_n], 1):
         is_pref     = entry["group"] in PREFERRED_GROUPS
@@ -4097,6 +4106,11 @@ def run_one_season(
               f"  {c(C.VALUE2, str(entry['episode_count']))} {c(C.AMBER, f'ep(s) [{cov_pct}]')}"
               f"  {c(C.AMBER_B, '|')}"
               f"  {c(C.VALUE2, str(entry['avg_seeders']))} {c(C.AMBER, 'avg/ep')}{badge}")
+
+    if batch_priority_summaries:
+        print(f"  {c(C.INFO_DIM, '[Batch-priority]')} "
+              f"{c(C.DIM, 'Strong batch-only source(s) detected and will be inspected first:')} "
+              f"{c(C.VALUE, '; '.join(batch_priority_summaries[:4]))}")
 
     if args.pick_group and not excluded_groups:
         divider("Select Sub Group")
