@@ -1087,6 +1087,7 @@ def find_best_batch_for_season(
     prefer_group: str = "",
     allowed_seasons: set[int] | None = None,
     season_info:  dict[int, dict] | None = None,
+    priority_groups: set[str] | None = None,
 ) -> dict | None:
     """
     Search *results* for the best batch torrent for *season*.
@@ -1113,8 +1114,14 @@ def find_best_batch_for_season(
 
     def _priority(r):
         grp     = extract_sub_group(r["title"]) or ""
+        is_priority = grp in (priority_groups or set())
         is_pref = (grp == prefer_group or grp in PREFERRED_GROUPS)
-        return (0 if is_pref else 1, -_torrent_score(r))
+        return (
+            0 if is_priority else 1,
+            0 if is_pref else 1,
+            -_title_resolution_rank(r["title"]),
+            -_torrent_score(r),
+        )
 
     candidates.sort(key=_priority)
 
@@ -1602,6 +1609,16 @@ def _torrent_score(r: dict) -> float:
     correct layer for that dimension.
     """
     return r.get("seeders", 0) * 1.0 + r.get("leechers", 0) * 0.4
+
+
+def _title_resolution_rank(title: str) -> int:
+    """
+    Higher is better: 2160p > 1080p > 720p > 480p > 360p > unknown.
+    """
+    m = re.search(r"\b(2160|1080|720|480|360)p\b", title, re.IGNORECASE)
+    if not m:
+        return 0
+    return int(m.group(1))
 
 
 def rank_sub_groups(results: list[dict]) -> list[dict]:
@@ -4052,6 +4069,16 @@ def run_one_season(
         print(f"  {c(C.YELLOW, '[FALLBACK]')} No preferred groups found for this series - "
               f"scoring all available groups by composite metric.")
 
+    batch_only_priority_groups = {
+        e["group"] for e in season_ranked
+        if e.get("episode_count", 0) == 0
+        and (e.get("total_seeders", 0) > 0 or e.get("total_leechers", 0) > 0)
+        and _title_resolution_rank(next(
+            (r["title"] for r in season_pool_for_rank if extract_sub_group(r["title"]) == e["group"]),
+            ""
+        )) >= 720
+    }
+
     for i, entry in enumerate(season_ranked[:top_n], 1):
         is_pref     = entry["group"] in PREFERRED_GROUPS
         badge       = f" {c(C.BADGE, '*')}" if is_pref else ""
@@ -4194,7 +4221,8 @@ def run_one_season(
         _batch_torrent = find_best_batch_for_season(raw, anime_name, season,
                                                      prefer_group=chosen_group,
                                                      allowed_seasons=allowed_seasons,
-                                                     season_info=season_info)
+                                                     season_info=season_info,
+                                                     priority_groups=batch_only_priority_groups)
         if _batch_torrent:
             _btag        = extract_sub_group(_batch_torrent["title"]) or "?"
             _batch_score = _torrent_score(_batch_torrent)
