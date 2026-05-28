@@ -2797,6 +2797,8 @@ def wait_for_downloads_or_stuck(
     monitor: CleanupMonitor,
     no_progress_secs: int = STUCK_NO_PROGRESS_SECS,
     poll_secs: int = 5,
+    last_seen: dict[str, tuple[str, float]] | None = None,
+    stagnant_since: dict[str, float] | None = None,
 ) -> dict:
     """
     Wait until monitor reaches zero pending torrents OR detect a stuck torrent.
@@ -2804,14 +2806,19 @@ def wait_for_downloads_or_stuck(
     A torrent is considered stuck when its (state, progress) pair does not
     change for no_progress_secs while in a download-related state.
     """
-    last_seen: dict[str, tuple[str, float]] = {}
-    stagnant_since: dict[str, float] = {}
+    last_seen = last_seen if last_seen is not None else {}
+    stagnant_since = stagnant_since if stagnant_since is not None else {}
 
     while monitor.pending_count() > 0:
         time.sleep(poll_secs)
         watched = monitor.watched_snapshot()
         if not watched:
             break
+        watched_hashes = {h.lower() for h in watched}
+        for stale_hash in list(last_seen.keys()):
+            if stale_hash not in watched_hashes:
+                last_seen.pop(stale_hash, None)
+                stagnant_since.pop(stale_hash, None)
         try:
             torrents = {t.hash.lower(): t for t in client.torrents_info()}
         except Exception:
@@ -4516,11 +4523,15 @@ def run_one_season(
             print()
 
             try:
+                _stuck_last_seen: dict[str, tuple[str, float]] = {}
+                _stuck_since: dict[str, float] = {}
                 stuck = wait_for_downloads_or_stuck(
                     client=client,
                     monitor=monitor,
                     no_progress_secs=STUCK_NO_PROGRESS_SECS,
                     poll_secs=5,
+                    last_seen=_stuck_last_seen,
+                    stagnant_since=_stuck_since,
                 )
             except KeyboardInterrupt:
                 stuck = {"stuck": False}
@@ -4673,6 +4684,8 @@ def run_one_season(
         print()
 
         dead_labels: list[str] = []
+        _stuck_last_seen: dict[str, tuple[str, float]] = {}
+        _stuck_since: dict[str, float] = {}
         try:
             while monitor.pending_count() > 0:
                 stuck = wait_for_downloads_or_stuck(
@@ -4680,6 +4693,8 @@ def run_one_season(
                     monitor=monitor,
                     no_progress_secs=STUCK_NO_PROGRESS_SECS,
                     poll_secs=5,
+                    last_seen=_stuck_last_seen,
+                    stagnant_since=_stuck_since,
                 )
                 if not stuck.get("stuck"):
                     break
@@ -4701,6 +4716,8 @@ def run_one_season(
                 except Exception:
                     log.exception("Failed to delete stuck episode torrent %s", stuck_hash)
                 monitor.unwatch(stuck_hash)
+                _stuck_last_seen.pop(stuck_hash, None)
+                _stuck_since.pop(stuck_hash, None)
 
                 if not meta:
                     dead_labels.append(stuck_label)
@@ -4749,6 +4766,8 @@ def run_one_season(
                     if retry_hash:
                         monitor.watch(retry_hash, meta["label"])
                         episode_retry_meta[retry_hash.lower()] = meta
+                        _stuck_last_seen.pop(retry_hash.lower(), None)
+                        _stuck_since.pop(retry_hash.lower(), None)
                         print(f"  {c(C.SUCCESS, '\u2713')} {c(C.ORANGE, meta['label'])} "
                               f"{c(C.DIM, 'retry added')} {c(C.CYAN_DIM, retry_hash)}")
                     else:
