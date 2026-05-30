@@ -760,6 +760,7 @@ def _is_batch_title(title: str, size_str: str = "") -> bool:
 
 
 _DETAIL_CACHE: dict[str, list[str]] = {}
+_ANILIST_SEASON_INFO_CACHE: dict[str, dict[int, dict]] = {}
 
 
 def _collect_torrent_leaf_entries(node, parents: list[str] | None = None) -> list[str]:
@@ -1009,6 +1010,9 @@ def inspect_batch_candidate(result: dict) -> bool:
     Returns False for single-file torrents or if the page fetch failed.
     Only call when the torrent is actually about to be used.
     """
+    if "batch_info" in result:
+        info = result.get("batch_info")
+        return bool(info and info.get("is_confirmed_batch"))
     filenames = fetch_batch_file_list(result["detail_url"])
     if not filenames:
         result["batch_info"] = None
@@ -2091,6 +2095,9 @@ def fetch_anilist_season_info(anime_name: str) -> dict[int, dict]:
     which is the highest episode that has actually been broadcast.
     Falls back silently on network/parse errors (returns {}).
     """
+    cache_key = _normalize_title_for_match(anime_name)
+    if cache_key in _ANILIST_SEASON_INFO_CACHE:
+        return _ANILIST_SEASON_INFO_CACHE[cache_key]
     try:
         resp = requests.post(
             ANILIST_API,
@@ -2098,10 +2105,12 @@ def fetch_anilist_season_info(anime_name: str) -> dict[int, dict]:
             timeout=10,
         )
         if resp.status_code != 200:
+            _ANILIST_SEASON_INFO_CACHE[cache_key] = {}
             return {}
         data    = resp.json()
         entries = data.get("data", {}).get("Page", {}).get("media", [])
         if not entries:
+            _ANILIST_SEASON_INFO_CACHE[cache_key] = {}
             return {}
 
         def _entry_titles(node: dict) -> list[str]:
@@ -2173,9 +2182,11 @@ def fetch_anilist_season_info(anime_name: str) -> dict[int, dict]:
                 season_num += 1
                 seasons[season_num] = _entry_info(node)
 
+        _ANILIST_SEASON_INFO_CACHE[cache_key] = seasons
         return seasons
     except Exception:
         log.exception("fetch_anilist_season_info failed for %r", anime_name)
+        _ANILIST_SEASON_INFO_CACHE[cache_key] = {}
         return {}
 
 
@@ -4870,10 +4881,9 @@ def run_one_season(
           f"{c(C.WARN if _norm.get('sub_skipped', 0) else C.DIM, str(_norm.get('sub_skipped', 0)) + ' skipped')}")
     # -- Update watch list -----------------------------------------------------
     # Re-query AniList to get current airing status for this season.
-    # Uses the same data already fetched during verify_episode_coverage but
-    # re-fetches here so run_one_season stays self-contained.
+    # Reuse the already-fetched season_info for this title/run.
     try:
-        sinfo       = fetch_anilist_season_info(anime_name).get(season, {})
+        sinfo       = season_info.get(season, {})
         _is_airing  = sinfo.get("airing", False)
         _total      = sinfo.get("total")
         _ep_nums    = sorted(e for r in episodes
