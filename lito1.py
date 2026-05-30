@@ -1397,7 +1397,7 @@ def post_process_batch_download(
             bucket = "movies"
             movie_title = file_info.get("movie_title") or _series_title_from_dir(series_dir)
             movie_year = file_info.get("movie_year")
-            dest = build_movie_target_path(movie_root, movie_title, src.suffix, movie_year)
+            dest = build_movie_target_path(movie_root, movie_title, src.suffix, movie_year, create_dirs=not dry_run)
             dest_dir = dest.parent
         else:
             dest_dir = season_sp_dir
@@ -1405,16 +1405,17 @@ def post_process_batch_download(
             file_season = 0
             dest = dest_dir / src.name
 
+        if dest.exists():
+            print(f"  {yellow('[EXISTS]')} {c(C.DIM, src.name)}")
+            _m, _s, _d = _route_subtitle_sidecars(src, dest, dest_dir, dry_run=dry_run)
+            sub_moved += _m
+            sub_skipped += _s
+            sub_detected += _d
+            moved[bucket].append(dest if not dry_run else src)
+            continue
+
         if not dry_run:
             dest_dir.mkdir(parents=True, exist_ok=True)
-            if dest.exists():
-                print(f"  {yellow('[EXISTS]')} {c(C.DIM, src.name)}")
-                _m, _s, _d = _route_subtitle_sidecars(src, dest, dest_dir, dry_run=dry_run)
-                sub_moved += _m
-                sub_skipped += _s
-                sub_detected += _d
-                moved[bucket].append(dest)
-                continue
             try:
                 shutil.move(str(src), str(dest))
                 log.info("Batch routed: %s -> %s", src.name, dest_dir.name)
@@ -2696,7 +2697,7 @@ def _series_title_from_dir(series_dir: Path) -> str:
     return sanitise_name(name)
 
 
-def find_jellyfin_movie_dir(anime_dir: Path) -> Path:
+def find_jellyfin_movie_dir(anime_dir: Path, create_dirs: bool = True) -> Path:
     """
     Resolve the Jellyfin movie-library root used for anime films.
 
@@ -2707,7 +2708,8 @@ def find_jellyfin_movie_dir(anime_dir: Path) -> Path:
         movie_dir = Path(MOVIE_LIBRARY_DIR)
     else:
         movie_dir = anime_dir.parent / "anime_movies"
-    movie_dir.mkdir(parents=True, exist_ok=True)
+    if create_dirs:
+        movie_dir.mkdir(parents=True, exist_ok=True)
     return movie_dir
 
 
@@ -4365,7 +4367,7 @@ def run_one_season(
     excluded_groups = excluded_groups or set()
     season_info = season_info or fetch_anilist_season_info(anime_name)
     related_movies = fetch_anilist_related_movies(anime_name)
-    movie_root = find_jellyfin_movie_dir(jellyfin_anime_dir)
+    movie_root = find_jellyfin_movie_dir(jellyfin_anime_dir, create_dirs=not args.dry_run)
     routed_batch: dict[str, list[Path]] | None = None
 
     print(f"\n{SEP_HASH}")
@@ -5573,7 +5575,7 @@ def reconcile_existing_media_library(anime_dir: Path, dry_run: bool = False) -> 
       - non-TV files in numbered season folders move to Season 00
       - TV files stay in place; this mode does not invent season structure
     """
-    movie_root = find_jellyfin_movie_dir(anime_dir)
+    movie_root = find_jellyfin_movie_dir(anime_dir, create_dirs=not dry_run)
     summary = {
         "series_scanned": 0,
         "videos_scanned": 0,
@@ -6001,7 +6003,7 @@ def run_watch_mode(args: argparse.Namespace, anime_dir: Path) -> None:
             print(f"  {c(C.SUCCESS, '✓')} Season complete - removing from active watch.")
         save_watchlist(anime_dir, entries)
 
-        trigger_jellyfin_rescan(season_label)
+        trigger_jellyfin_rescan(season_label, anime_dir)
 
     if not any_new:
         print()
