@@ -26,3 +26,4 @@ default_preset = "General/Fast 1080p30"
 [pipeline]
 hs_marker = ".hs"
 movie_library_dir = ""   # optional absolute path; empty defaults to sibling anime_movies folder
+batch_staging_dir = ""   # optional absolute path; empty defaults to drive-root _lito1_staging folder on the same volume

@@ -113,6 +113,7 @@ default_preset = "General/Fast 1080p30"
 [pipeline]
 hs_marker = ".hs"
 movie_library_dir = ""
+batch_staging_dir = ""
 """, encoding="utf-8")
 
 _write_example_config()
@@ -156,6 +157,7 @@ HB_DEFAULT_PRESET = _cfg("handbrake", "default_preset", "General/Fast 1080p30")
 # .hs suffix appended before the file extension to mark hard-subbed outputs
 HS_MARKER = _cfg("pipeline", "hs_marker", ".hs")
 MOVIE_LIBRARY_DIR = str(_cfg("pipeline", "movie_library_dir", "") or "").strip()
+BATCH_STAGING_DIR = str(_cfg("pipeline", "batch_staging_dir", "") or "").strip()
 
 VIDEO_EXTENSIONS = {".mkv", ".mp4"}
 
@@ -2713,6 +2715,37 @@ def find_jellyfin_movie_dir(anime_dir: Path, create_dirs: bool = True) -> Path:
     return movie_dir
 
 
+def find_batch_staging_root(anime_dir: Path, create_dirs: bool = True) -> Path:
+    """
+    Resolve the root used for temporary batch staging.
+
+    This must live outside the anime library tree so Jellyfin does not mistake
+    staging folders for seasons. By default we keep it at the drive root on
+    the same volume, e.g. `D:\\_lito1_staging`.
+    """
+    if BATCH_STAGING_DIR:
+        staging_root = Path(BATCH_STAGING_DIR)
+    else:
+        staging_root = Path(anime_dir.anchor) / "_lito1_staging"
+    if create_dirs:
+        staging_root.mkdir(parents=True, exist_ok=True)
+    return staging_root
+
+
+def build_batch_staging_dir(anime_dir: Path, anime_name: str, season: int | None,
+                            create_dirs: bool = True) -> Path:
+    """
+    Build the per-series/per-season batch staging directory outside the Jellyfin
+    anime library tree.
+    """
+    staging_root = find_batch_staging_root(anime_dir, create_dirs=create_dirs)
+    series_stage = staging_root / sanitise_name(anime_name)
+    season_stage = series_stage / f"Season {(season or 1):02d}"
+    if create_dirs:
+        season_stage.mkdir(parents=True, exist_ok=True)
+    return season_stage
+
+
 def normalize_series_filenames_for_jellyfin(series_dir: Path, dry_run: bool = False) -> dict[str, int]:
     """
     Normalize video filenames to Jellyfin-friendly patterns:
@@ -4721,7 +4754,12 @@ def run_one_season(
     # -------------------------------------------------------------------------
     if _using_batch and _batch_torrent:
         series_dir    = Path(build_save_path(jellyfin_anime_dir, anime_name, season)).parent
-        batch_staging = series_dir / "_batch_staging" / f"Season {(season or 1):02d}"
+        batch_staging = build_batch_staging_dir(
+            jellyfin_anime_dir,
+            anime_name,
+            season,
+            create_dirs=False,
+        )
         season_tv_dir = series_dir / f"Season {(season or 1):02d}"
 
         # -- Integrity check helpers --------------------------------------------
@@ -5576,11 +5614,13 @@ def reconcile_existing_media_library(anime_dir: Path, dry_run: bool = False) -> 
       - TV files stay in place; this mode does not invent season structure
     """
     movie_root = find_jellyfin_movie_dir(anime_dir, create_dirs=not dry_run)
+    staging_root = find_batch_staging_root(anime_dir, create_dirs=not dry_run)
     summary = {
         "series_scanned": 0,
         "videos_scanned": 0,
         "movies_moved": 0,
         "specials_moved": 0,
+        "staging_dirs_moved": 0,
         "already_ok": 0,
         "skipped": 0,
         "errors": 0,
@@ -5590,6 +5630,7 @@ def reconcile_existing_media_library(anime_dir: Path, dry_run: bool = False) -> 
     divider("Library Reconcile")
     print(f"  {c(C.LABEL, 'Anime root:')} {c(C.VALUE, str(anime_dir))}")
     print(f"  {c(C.LABEL, 'Movie root:')} {c(C.VALUE, str(movie_root))}")
+    print(f"  {c(C.LABEL, 'Staging root:')} {c(C.VALUE, str(staging_root))}")
     print(f"  {c(C.DIM, 'Mode:')} {c(C.VALUE, 'DRY-RUN' if dry_run else 'APPLY CHANGES')}")
 
     season_pat = re.compile(r"^Season (\d{2})$", re.IGNORECASE)
@@ -5599,6 +5640,37 @@ def reconcile_existing_media_library(anime_dir: Path, dry_run: bool = False) -> 
     )
 
     for series_dir in series_dirs:
+        legacy_staging = series_dir / "_batch_staging"
+        if legacy_staging.is_dir():
+            target_root = find_batch_staging_root(anime_dir, create_dirs=not dry_run) / sanitise_name(series_dir.name)
+            try:
+                if dry_run:
+                    print()
+                    print(f"  {c(C.CYAN_DIM, 'staging')} {c(C.MUTED, legacy_staging.name)} {c(C.DIM, '->')} {c(C.VALUE, str(target_root))}")
+                else:
+                    target_root.mkdir(parents=True, exist_ok=True)
+                    for child in legacy_staging.iterdir():
+                        child_target = target_root / child.name
+                        if child_target.exists():
+                            if child.is_dir():
+                                for nested in child.iterdir():
+                                    shutil.move(str(nested), str(child_target / nested.name))
+                                child.rmdir()
+                            else:
+                                summary["skipped"] += 1
+                                print(f"    {c(C.WARN, '[SKIP]')} {c(C.MUTED, child.name)} {c(C.DIM, '-> staging target already exists')}")
+                                continue
+                        else:
+                            shutil.move(str(child), str(child_target))
+                    if not any(legacy_staging.iterdir()):
+                        legacy_staging.rmdir()
+                    print()
+                    print(f"  {c(C.CYAN_DIM, 'staging')} {c(C.MUTED, legacy_staging.name)} {c(C.DIM, '->')} {c(C.VALUE, str(target_root))}")
+                summary["staging_dirs_moved"] += 1
+            except OSError as exc:
+                summary["errors"] += 1
+                print(f"    {c(C.WARN, '[ERROR]')} {c(C.MUTED, str(legacy_staging))} {c(C.DIM, str(exc))}")
+
         season_dirs = sorted(
             p for p in series_dir.iterdir()
             if p.is_dir() and season_pat.match(p.name)
@@ -5689,6 +5761,7 @@ def reconcile_existing_media_library(anime_dir: Path, dry_run: bool = False) -> 
     print(f"  {c(C.DIM, 'Videos scanned:')} {c(C.VALUE2, str(summary['videos_scanned']))}")
     print(f"  {c(C.DIM, 'Movies moved:')} {c(C.SUCCESS, str(summary['movies_moved']))}")
     print(f"  {c(C.DIM, 'Specials moved:')} {c(C.CYAN_DIM, str(summary['specials_moved']))}")
+    print(f"  {c(C.DIM, 'Legacy staging moved:')} {c(C.CYAN_DIM, str(summary['staging_dirs_moved']))}")
     print(f"  {c(C.DIM, 'Already OK:')} {c(C.DIM, str(summary['already_ok']))}")
     print(f"  {c(C.DIM, 'Skipped:')} {c(C.WARN if summary['skipped'] else C.DIM, str(summary['skipped']))}")
     print(f"  {c(C.DIM, 'Errors:')} {c(C.WARN if summary['errors'] else C.DIM, str(summary['errors']))}")

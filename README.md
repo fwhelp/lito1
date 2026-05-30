@@ -83,7 +83,10 @@ lito1 --reconcile-library
 - Movie content is routed to a separate movie-library root
 - Set `[pipeline].movie_library_dir` in `config.toml` if you want a custom movie path
 - If `movie_library_dir` is blank, `lito1` uses a sibling `anime_movies` folder next to your anime TV root
+- Batch staging is kept outside the anime library tree by default in a drive-root `_lito1_staging` folder on the same volume
+- Set `[pipeline].batch_staging_dir` in `config.toml` if you want a custom staging path
 - Use `--reconcile-library` to audit existing media and move obvious movies/specials into the right places
+- `--reconcile-library` also evacuates old in-library `_batch_staging` folders so Jellyfin stops seeing them as seasons
 - Use `--reconcile-library --dry-run` first if you want a preview before anything moves
 
 ## Requirements
