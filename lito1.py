@@ -1933,20 +1933,20 @@ def extract_episode_number(title: str) -> int | None:
                                    "NCOP", "NCED", "MOVIE", "BATCH"):
             return None
         ep = info.get("episode_number")
-        if ep is None:
-            return None
-        # Skip batch packs - anitopy returns a list for "01-03"
-        if isinstance(ep, list):
-            return None
-        ep_str = str(ep)
-        # Skip version-suffixed non-numeric values and specials like "OVA"
-        if not re.match(r"^\d+$", ep_str):
-            return None
-        return int(ep_str)
+        if ep is not None:
+            # Skip batch packs - anitopy returns a list for "01-03"
+            if isinstance(ep, list):
+                return None
+            ep_str = str(ep)
+            # Skip version-suffixed non-numeric values and specials like "OVA"
+            if re.match(r"^\d+$", ep_str):
+                return int(ep_str)
     # Regex fallback
     m = re.search(r"[--]\s*(\d{1,3})(?:\s*[\[\(v\s]|$)", title)
     if m: return int(m.group(1))
     m = re.search(r"\bE(?:P)?(\d{1,3})\b", title, re.IGNORECASE)
+    if m: return int(m.group(1))
+    m = re.search(r"\bEpisode[\s._-]*(\d{1,3})\b", title, re.IGNORECASE)
     if m: return int(m.group(1))
     return None
 
