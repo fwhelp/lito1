@@ -112,6 +112,7 @@ default_preset = "General/Fast 1080p30"
 
 [pipeline]
 hs_marker = ".hs"
+movie_library_dir = ""
 """, encoding="utf-8")
 
 _write_example_config()
@@ -154,6 +155,7 @@ HB_DEFAULT_PRESET = _cfg("handbrake", "default_preset", "General/Fast 1080p30")
 
 # .hs suffix appended before the file extension to mark hard-subbed outputs
 HS_MARKER = _cfg("pipeline", "hs_marker", ".hs")
+MOVIE_LIBRARY_DIR = str(_cfg("pipeline", "movie_library_dir", "") or "").strip()
 
 VIDEO_EXTENSIONS = {".mkv", ".mp4"}
 
@@ -769,6 +771,7 @@ def _is_batch_title(title: str, size_str: str = "") -> bool:
 _DETAIL_CACHE: dict[str, list[str]] = {}
 _SEARCH_CACHE: dict[tuple[str, int], list[dict]] = {}
 _ANILIST_SEASON_INFO_CACHE: dict[str, dict[int, dict]] = {}
+_ANILIST_RELATED_MOVIES_CACHE: dict[str, list[dict]] = {}
 
 
 def _collect_torrent_leaf_entries(node, parents: list[str] | None = None) -> list[str]:
@@ -911,6 +914,10 @@ def _find_matching_subtitles(folder: Path, video_stem: str) -> list[Path]:
     return sorted(out)
 
 
+def _is_movie_like_format(fmt: str) -> bool:
+    return str(fmt or "").upper() in {"MOVIE", "SPECIAL", "OVA", "ONA", "OAD"}
+
+
 def _fallback_batch_episode_number(stem: str) -> int | None:
     """
     Conservative episode fallback for batch file names.
@@ -926,7 +933,28 @@ def _fallback_batch_episode_number(stem: str) -> int | None:
     return None
 
 
-def _classify_batch_file(filename: str) -> dict:
+def _match_related_movie(filename: str, related_movies: list[dict]) -> dict | None:
+    name_norm = _normalize_title_for_match(Path(filename).stem)
+    best: dict | None = None
+    best_len = 0
+    for movie in related_movies:
+        for alias in movie.get("titles") or []:
+            alias_norm = _normalize_title_for_match(alias)
+            if not alias_norm or len(alias_norm) < 4:
+                continue
+            if alias_norm in name_norm and len(alias_norm) > best_len:
+                best = movie
+                best_len = len(alias_norm)
+    return best
+
+
+def _classify_batch_file(
+    filename: str,
+    anime_name: str = "",
+    default_format: str = "",
+    default_year: int | None = None,
+    related_movies: list[dict] | None = None,
+) -> dict:
     """
     Classify one entry from a batch torrent detail page.
 
@@ -945,6 +973,9 @@ def _classify_batch_file(filename: str) -> dict:
     stem     = Path(base_name).stem
     ext      = Path(base_name).suffix.lower()
     is_video = ext in _VIDEO_EXT
+
+    matched_movie = _match_related_movie(filename, related_movies or [])
+    is_explicit_movie = bool(re.search(r"\b(movie|film|gekijouban|the movie)\b", stem, re.IGNORECASE))
 
     if _OVA_PAT.search(stem):
         category = "ova"
@@ -980,12 +1011,31 @@ def _classify_batch_file(filename: str) -> dict:
     if season_num is None:
         season_num = extract_explicit_season_number(base_name)
 
+    movie_title = None
+    movie_year = None
+    if is_video and category == "tv":
+        if matched_movie:
+            category = "movie"
+            movie_title = matched_movie.get("title")
+            movie_year = matched_movie.get("year")
+        elif ep_num is None and season_num is None and (_is_movie_like_format(default_format) or is_explicit_movie):
+            category = "movie"
+            movie_title = sanitise_name(anime_name or stem)
+            movie_year = default_year
+
     return {"filename": base_name, "relative_path": filename, "expected_bytes": expected_bytes,
             "is_video": is_video, "category": category,
-            "ep_num": ep_num, "season_num": season_num}
+            "ep_num": ep_num, "season_num": season_num,
+            "movie_title": movie_title, "movie_year": movie_year}
 
 
-def classify_batch_files(filenames: list[str]) -> dict:
+def classify_batch_files(
+    filenames: list[str],
+    anime_name: str = "",
+    default_format: str = "",
+    default_year: int | None = None,
+    related_movies: list[dict] | None = None,
+) -> dict:
     """
     Classify all files in a batch torrent and return a summary dict.
 
@@ -997,11 +1047,21 @@ def classify_batch_files(filenames: list[str]) -> dict:
                           # e.g. [1, 2] for a Season 1+2 pack, [1] for single
     }
     """
-    classified = [_classify_batch_file(f) for f in filenames]
+    classified = [
+        _classify_batch_file(
+            f,
+            anime_name=anime_name,
+            default_format=default_format,
+            default_year=default_year,
+            related_movies=related_movies,
+        )
+        for f in filenames
+    ]
     video    = [f for f in classified if f["is_video"]]
     tv       = sorted([f for f in video if f["category"] == "tv"],
                       key=lambda f: f["ep_num"] or 0)
-    specials = sorted([f for f in video if f["category"] != "tv"],
+    movies   = [f for f in video if f["category"] == "movie"]
+    specials = sorted([f for f in video if f["category"] not in {"tv", "movie"}],
                       key=lambda f: f["ep_num"] or 0)
 
     # Determine which distinct seasons are present in the TV files
@@ -1013,9 +1073,11 @@ def classify_batch_files(filenames: list[str]) -> dict:
     return {
         "files":              classified,
         "tv_episodes":        tv,
+        "movies":             movies,
         "specials":           specials,
         "video_count":        len(video),
         "tv_count":           len(tv),
+        "movie_count":        len(movies),
         "special_count":      len(specials),
         "is_confirmed_batch": len(video) >= 2,
         "is_single_video":    len(video) == 1,
@@ -1023,7 +1085,13 @@ def classify_batch_files(filenames: list[str]) -> dict:
     }
 
 
-def inspect_batch_candidate(result: dict) -> bool:
+def inspect_batch_candidate(
+    result: dict,
+    anime_name: str = "",
+    default_format: str = "",
+    default_year: int | None = None,
+    related_movies: list[dict] | None = None,
+) -> bool:
     """
     Fetch the detail page for *result*, classify its files, and attach
     result["batch_info"] in place.
@@ -1039,7 +1107,13 @@ def inspect_batch_candidate(result: dict) -> bool:
     if not filenames:
         result["batch_info"] = None
         return False
-    info = classify_batch_files(filenames)
+    info = classify_batch_files(
+        filenames,
+        anime_name=anime_name,
+        default_format=default_format,
+        default_year=default_year,
+        related_movies=related_movies,
+    )
     result["batch_info"] = info
     return info["is_confirmed_batch"]
 
@@ -1050,11 +1124,13 @@ def print_batch_info(result: dict, tv_season: int = 1) -> None:
     if not info:
         return
     tv_eps          = info["tv_episodes"]
+    movies          = info.get("movies", [])
     specials        = info["specials"]
     seasons_present = info.get("seasons_present", [])
 
     print(f"  {c(C.AMBER, 'Batch contents:')}")
     print(f"    {c(C.VALUE2, str(info['tv_count']))} TV episode(s)  "
+          f"{c(C.VALUE2, str(info.get('movie_count', 0)))} movie file(s)  "
           f"{c(C.VALUE2, str(info['special_count']))} special/OVA file(s)  "
           f"{c(C.DIM, f'({info["video_count"]} video files total)')}")
 
@@ -1096,6 +1172,17 @@ def print_batch_info(result: dict, tv_season: int = 1) -> None:
                 ep_str = "?"
             print(f"    {c(C.DIM, f'TV       -> Season {tv_season:02d}:')} {c(C.VALUE, ep_str)}")
 
+    if movies:
+        movie_labels = []
+        for f in movies[:6]:
+            mt = sanitise_name(f.get("movie_title") or Path(f["filename"]).stem)
+            my = f.get("movie_year")
+            movie_labels.append(f"{mt} ({my})" if my else mt)
+        movie_str = ", ".join(movie_labels)
+        if len(movies) > 6:
+            movie_str += f" ... ({len(movies)} total)"
+        print(f"    {c(C.DIM, 'MOVIE    -> movie library:')} {c(C.VALUE, movie_str)}")
+
     if specials:
         by_cat: dict[str, list] = defaultdict(list)
         for f in specials:
@@ -1114,6 +1201,7 @@ def find_best_batch_for_season(
     allowed_seasons: set[int] | None = None,
     season_info:  dict[int, dict] | None = None,
     priority_groups: set[str] | None = None,
+    related_movies: list[dict] | None = None,
 ) -> dict | None:
     """
     Search *results* for the best batch torrent for *season*.
@@ -1159,7 +1247,13 @@ def find_best_batch_for_season(
         if not _batch_title_matches_series_family(r["title"], anime_name, season_info):
             print(f"  {c(C.WARN, '[SKIP]')} {c(C.DIM, 'batch title looks like a spinoff / unrelated side entry')}")
             continue
-        if inspect_batch_candidate(r):
+        if inspect_batch_candidate(
+            r,
+            anime_name=anime_name,
+            default_format=_fmt,
+            default_year=((season_info or {}).get(season) or {}).get("year"),
+            related_movies=related_movies,
+        ):
             if allowed_seasons is not None:
                 _binfo = r.get("batch_info") or {}
                 _present = set(_binfo.get("seasons_present") or [])
@@ -1184,6 +1278,7 @@ def post_process_batch_download(
     download_dir: Path,
     batch_info:   dict,
     series_dir:   Path,
+    movie_root:   Path,
     tv_season:    int = 1,
     dry_run:      bool = False,
 ) -> dict[str, list[Path]]:
@@ -1195,14 +1290,15 @@ def post_process_batch_download(
                                                 tv_season is the fallback for
                                                 files with no season tag
     OVA/specials   -> <series_dir>/Season 00/
+    Movies         -> <movie_root>/Title (Year)/Title (Year).mkv
 
     Handles multi-season packs (e.g. Season 1+2) by routing each file
     individually based on its own season number extracted by anitopy.
-    Returns {"tv": [...], "specials": [...], "skipped": [...]}.
+    Returns {"tv": [...], "movies": [...], "specials": [...], "skipped": [...]}.
     Never raises; errors collected in "skipped".
     """
     season_sp_dir = series_dir / "Season 00"
-    moved: dict[str, list[Path]] = {"tv": [], "specials": [], "skipped": []}
+    moved: dict[str, list[Path]] = {"tv": [], "movies": [], "specials": [], "skipped": []}
     routed_tv_by_season: dict[int, list[int | None]] = defaultdict(list)
     sub_moved = 0
     sub_skipped = 0
@@ -1279,12 +1375,19 @@ def post_process_batch_download(
             file_season = file_info.get("season_num") or tv_season
             dest_dir    = series_dir / f"Season {file_season:02d}"
             bucket      = "tv"
+            dest        = dest_dir / src.name
+        elif cat == "movie":
+            file_season = None
+            bucket = "movies"
+            movie_title = file_info.get("movie_title") or _series_title_from_dir(series_dir)
+            movie_year = file_info.get("movie_year")
+            dest = build_movie_target_path(movie_root, movie_title, src.suffix, movie_year)
+            dest_dir = dest.parent
         else:
             dest_dir = season_sp_dir
             bucket   = "specials"
             file_season = 0
-
-        dest = dest_dir / src.name
+            dest = dest_dir / src.name
 
         if not dry_run:
             dest_dir.mkdir(parents=True, exist_ok=True)
@@ -1303,8 +1406,12 @@ def post_process_batch_download(
                 continue
 
         tag   = magenta("[DRY-RUN]") if dry_run else green("ok")
-        label = (c(C.DIM, "Season 00 (Specials)") if cat != "tv"
-                 else c(C.DIM, f"Season {file_season:02d}"))
+        if cat == "tv":
+            label = c(C.DIM, f"Season {file_season:02d}")
+        elif cat == "movie":
+            label = c(C.DIM, f"Movie Library ({dest.parent.name})")
+        else:
+            label = c(C.DIM, "Season 00 (Specials)")
         print(f"  {c(C.SUCCESS, tag)} {c(C.MUTED, src.name[:52])} {c(C.DIM, '->')} {label}")
         _route_subtitle_sidecars(src, dest if not dry_run else src, dest_dir)
         moved[bucket].append(dest if not dry_run else src)
@@ -1312,9 +1419,11 @@ def post_process_batch_download(
             routed_tv_by_season[file_season].append(file_info.get("ep_num"))
 
     tv_n = len(moved["tv"])
+    mv_n = len(moved["movies"])
     sp_n = len(moved["specials"])
     sk_n = len(moved["skipped"])
     print(f"\n  {c(C.SUCCESS, str(tv_n))} TV  "
+          f"{c(C.VALUE, str(mv_n))} movie  "
           f"{c(C.CYAN_DIM, str(sp_n))} special/OVA  "
           f"{c(C.WARN if sk_n else C.DIM, str(sk_n) + ' skipped')}")
     if sub_detected:
@@ -2219,6 +2328,83 @@ def fetch_anilist_season_info(anime_name: str) -> dict[int, dict]:
         return {}
 
 
+def fetch_anilist_related_movies(anime_name: str) -> list[dict]:
+    """
+    Return directly related AniList movie entries for a franchise title.
+
+    Result items:
+      {"title": str, "year": int|None, "titles": [aliases...]}
+    """
+    cache_key = _normalize_title_for_match(anime_name)
+    if cache_key in _ANILIST_RELATED_MOVIES_CACHE:
+        return _ANILIST_RELATED_MOVIES_CACHE[cache_key]
+    try:
+        resp = requests.post(
+            ANILIST_API,
+            json={"query": _ANILIST_QUERY, "variables": {"search": anime_name}},
+            timeout=10,
+        )
+        if resp.status_code != 200:
+            _ANILIST_RELATED_MOVIES_CACHE[cache_key] = []
+            return []
+        data = resp.json()
+        entries = data.get("data", {}).get("Page", {}).get("media", [])
+        if not entries:
+            _ANILIST_RELATED_MOVIES_CACHE[cache_key] = []
+            return []
+
+        def _entry_titles(node: dict) -> list[str]:
+            title_obj = node.get("title") or {}
+            raw_titles = [
+                title_obj.get("english"),
+                title_obj.get("romaji"),
+                title_obj.get("native"),
+            ]
+            raw_titles.extend(node.get("synonyms") or [])
+            seen: set[str] = set()
+            titles: list[str] = []
+            for t in raw_titles:
+                if not t:
+                    continue
+                ts = str(t).strip()
+                key = ts.lower()
+                if not ts or key in seen:
+                    continue
+                seen.add(key)
+                titles.append(ts)
+            return titles
+
+        movies: list[dict] = []
+        seen_keys: set[str] = set()
+        nodes = [entries[0]] + [
+            edge.get("node") or {}
+            for edge in (entries[0].get("relations", {}) or {}).get("edges", [])
+        ]
+        for node in nodes:
+            if (node.get("format") or "").upper() != "MOVIE":
+                continue
+            titles = _entry_titles(node)
+            if not titles:
+                continue
+            title = titles[0]
+            year = node.get("seasonYear") or None
+            key = f"{_normalize_title_for_match(title)}::{year or ''}"
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
+            movies.append({
+                "title": title,
+                "year": int(year) if str(year).isdigit() else None,
+                "titles": titles,
+            })
+        _ANILIST_RELATED_MOVIES_CACHE[cache_key] = movies
+        return movies
+    except Exception:
+        log.exception("fetch_anilist_related_movies failed for %r", anime_name)
+        _ANILIST_RELATED_MOVIES_CACHE[cache_key] = []
+        return []
+
+
 # Thin compatibility wrapper used elsewhere in the script
 def fetch_anilist_episode_counts(anime_name: str) -> dict[int, int | None]:
     info = fetch_anilist_season_info(anime_name)
@@ -2488,6 +2674,21 @@ def _series_title_from_dir(series_dir: Path) -> str:
     return sanitise_name(name)
 
 
+def find_jellyfin_movie_dir(anime_dir: Path) -> Path:
+    """
+    Resolve the Jellyfin movie-library root used for anime films.
+
+    Defaults to a sibling `anime_movies` directory next to the anime TV root
+    unless explicitly overridden in config.toml.
+    """
+    if MOVIE_LIBRARY_DIR:
+        movie_dir = Path(MOVIE_LIBRARY_DIR)
+    else:
+        movie_dir = anime_dir.parent / "anime_movies"
+    movie_dir.mkdir(parents=True, exist_ok=True)
+    return movie_dir
+
+
 def normalize_series_filenames_for_jellyfin(series_dir: Path, dry_run: bool = False) -> dict[str, int]:
     """
     Normalize video filenames to Jellyfin-friendly patterns:
@@ -2642,6 +2843,28 @@ def build_save_path(anime_dir: Path, anime_name: str, season: int | None,
     save_path.mkdir(parents=True, exist_ok=True)
     log.debug("build_save_path -> %s", save_path)
     return str(save_path)
+
+
+def build_movie_target_path(
+    movie_root: Path,
+    movie_title: str,
+    ext: str,
+    year: int | None = None,
+    provider_id: str = "",
+    create_dirs: bool = True,
+) -> Path:
+    """
+    Build a Jellyfin-friendly movie target path:
+      <movie_root>/Title (Year)/Title (Year).ext
+    """
+    base_title = sanitise_name(movie_title)
+    folder_name = f"{base_title} ({year})" if year else base_title
+    if provider_id:
+        folder_name = f"{folder_name} [{sanitise_name(provider_id)}]"
+    target_dir = movie_root / folder_name
+    if create_dirs:
+        target_dir.mkdir(parents=True, exist_ok=True)
+    return target_dir / f"{folder_name}{ext}"
 
 
 # -- qBittorrent helpers -------------------------------------------------------
@@ -4117,6 +4340,9 @@ def run_one_season(
     season_label = f"Season {season}"
     excluded_groups = excluded_groups or set()
     season_info = season_info or fetch_anilist_season_info(anime_name)
+    related_movies = fetch_anilist_related_movies(anime_name)
+    movie_root = find_jellyfin_movie_dir(jellyfin_anime_dir)
+    routed_batch: dict[str, list[Path]] | None = None
 
     print(f"\n{SEP_HASH}")
     print(magenta(f"  >  {season_label}"))
@@ -4297,9 +4523,10 @@ def run_one_season(
     #     (< 75% of aired episodes).  Per-episode is correct while a show is
     #     airing because the batch doesn't exist yet for unwatched episodes.
     #
-    # A batch is CONFIRMED only when the nyaa detail page shows >= 2 video files,
-    # protecting movies, standalone OVAs, and single-episode anime from ever
-    # being routed through the batch path.
+    # A batch is normally CONFIRMED only when the nyaa detail page shows >= 2
+    # video files. The one exception is movie-like AniList formats, where a
+    # healthy single-video source is allowed through the same routing path so
+    # it can be named and placed into the movie library cleanly.
     # --------------------------------------------------------------------------
     _batch_torrent: dict | None = None
     _using_batch   = False
@@ -4335,7 +4562,8 @@ def run_one_season(
                                                      prefer_group=chosen_group,
                                                      allowed_seasons=allowed_seasons,
                                                      season_info=season_info,
-                                                     priority_groups=batch_only_priority_groups)
+                                                     priority_groups=batch_only_priority_groups,
+                                                     related_movies=related_movies)
         if _batch_torrent:
             _btag        = extract_sub_group(_batch_torrent["title"]) or "?"
             _batch_score = _torrent_score(_batch_torrent)
@@ -4383,7 +4611,7 @@ def run_one_season(
         divider(f"Batch Plan - {season_label}")
         _binfo = _batch_torrent["batch_info"]
         print(f"  {c(C.AMBER_B, 'Mode:')}   {c(C.VALUE, 'BATCH TORRENT')}  "
-              f"{c(C.DIM, f"({_binfo['tv_count']} TV  +  {_binfo['special_count']} specials)")}")
+              f"{c(C.DIM, f"({_binfo['tv_count']} TV  +  {_binfo.get('movie_count', 0)} movies  +  {_binfo['special_count']} specials)")}")
         print_batch_info(_batch_torrent)
     else:
         divider(f"Episode List - {season_label}")
@@ -4549,23 +4777,42 @@ def run_one_season(
                     incomplete += 1
             return complete, incomplete
 
-        _enc_ok,  _enc_bad  = _scan_dir(season_tv_dir, require_hs=True)
-        _raw_ok,  _raw_bad  = _scan_dir(season_tv_dir, require_hs=False)
-        _stg_ok,  _stg_bad  = _scan_dir(batch_staging, require_hs=False)
+        def _scan_movie_targets() -> tuple[int, int]:
+            if not _bi:
+                return 0, 0
+            complete = incomplete = 0
+            for fi in _bi.get("movies", []):
+                target = build_movie_target_path(
+                    movie_root,
+                    fi.get("movie_title") or anime_name,
+                    Path(fi["filename"]).suffix,
+                    fi.get("movie_year"),
+                    create_dirs=False,
+                )
+                if _file_is_complete(target):
+                    complete += 1
+                elif target.exists():
+                    incomplete += 1
+            return complete, incomplete
+
+        _enc_ok,   _enc_bad   = _scan_dir(season_tv_dir, require_hs=True)
+        _raw_ok,   _raw_bad   = _scan_dir(season_tv_dir, require_hs=False)
+        _stg_ok,   _stg_bad   = _scan_dir(batch_staging, require_hs=False)
+        _movie_ok, _movie_bad = _scan_movie_targets()
 
         # Log the full picture for debugging
-        log.debug("Resume check - encoded: %d ok / %d bad | routed: %d ok / %d bad "
-                  "| staging: %d ok / %d bad",
-                  _enc_ok, _enc_bad, _raw_ok, _raw_bad, _stg_ok, _stg_bad)
+        log.debug("Resume check - encoded: %d ok / %d bad | routed tv: %d ok / %d bad "
+                  "| routed movies: %d ok / %d bad | staging: %d ok / %d bad",
+                  _enc_ok, _enc_bad, _raw_ok, _raw_bad, _movie_ok, _movie_bad, _stg_ok, _stg_bad)
 
         # Warn the user if we found incomplete files on disk
-        _bad_total = _enc_bad + _raw_bad + _stg_bad
+        _bad_total = _enc_bad + _raw_bad + _movie_bad + _stg_bad
         if _bad_total > 0:
             print(f"  {c(C.WARN, f'[WARN] {_bad_total} incomplete/zero-byte file(s) found on disk '
                          f'(wrong size vs nyaa manifest) - will not be treated as complete.')}")
 
         _encoded_count = _enc_ok
-        _routed_count  = _raw_ok
+        _routed_count  = _raw_ok + _movie_ok
         _staging_count = _stg_ok
 
         # -- State A: encode already done --------------------------------------
@@ -4596,10 +4843,11 @@ def run_one_season(
                      _staging_count, season)
             monitor.stop()
             batch_staging.mkdir(parents=True, exist_ok=True)
-            post_process_batch_download(
+            routed_batch = post_process_batch_download(
                 download_dir = batch_staging,
                 batch_info   = _batch_torrent["batch_info"],
                 series_dir   = series_dir,
+                movie_root   = movie_root,
                 tv_season    = season or 1,
                 dry_run      = args.dry_run,
             )
@@ -4730,10 +4978,11 @@ def run_one_season(
                     print(f"  {c(C.SUCCESS, '\u2713')} {c(C.ORANGE, lbl)}")
 
             # Route files from staging to Season NN / Season 00
-            post_process_batch_download(
+            routed_batch = post_process_batch_download(
                 download_dir = batch_staging,
                 batch_info   = _batch_torrent["batch_info"],
                 series_dir   = series_dir,
+                movie_root   = movie_root,
                 tv_season    = season or 1,
                 dry_run      = args.dry_run,
             )
@@ -4969,15 +5218,29 @@ def run_one_season(
     # Encoding/transcoding phase removed: files go directly from qBittorrent to Jellyfin.
     # Continue with watch list update + Jellyfin rescan only.
     _series_dir = Path(save_path).parent
-    _norm = normalize_series_filenames_for_jellyfin(_series_dir, dry_run=args.dry_run)
-    print(f"  {c(C.DIM, 'Filename normalize:')} "
-          f"{c(C.SUCCESS, str(_norm['renamed']))} renamed, "
-          f"{c(C.DIM, str(_norm['already']))} already canonical, "
-          f"{c(C.WARN if _norm['collisions'] else C.DIM, str(_norm['collisions']) + ' collisions')}, "
-          f"{c(C.WARN if _norm['skipped'] else C.DIM, str(_norm['skipped']) + ' skipped')}")
-    print(f"  {c(C.DIM, 'Subtitle normalize:')} "
-          f"{c(C.SUCCESS, str(_norm.get('sub_renamed', 0)))} renamed, "
-          f"{c(C.WARN if _norm.get('sub_skipped', 0) else C.DIM, str(_norm.get('sub_skipped', 0)) + ' skipped')}")
+    _has_series_content = True
+    _has_movie_content = False
+    if routed_batch is not None:
+        _has_series_content = bool(routed_batch.get("tv") or routed_batch.get("specials"))
+        _has_movie_content = bool(routed_batch.get("movies"))
+    elif _using_batch and _batch_torrent and _batch_torrent.get("batch_info"):
+        _binfo = _batch_torrent["batch_info"]
+        _has_series_content = bool(_binfo.get("tv_count", 0) or _binfo.get("special_count", 0))
+        _has_movie_content = bool(_binfo.get("movie_count", 0))
+
+    if _has_series_content:
+        _norm = normalize_series_filenames_for_jellyfin(_series_dir, dry_run=args.dry_run)
+        print(f"  {c(C.DIM, 'Filename normalize:')} "
+              f"{c(C.SUCCESS, str(_norm['renamed']))} renamed, "
+              f"{c(C.DIM, str(_norm['already']))} already canonical, "
+              f"{c(C.WARN if _norm['collisions'] else C.DIM, str(_norm['collisions']) + ' collisions')}, "
+              f"{c(C.WARN if _norm['skipped'] else C.DIM, str(_norm['skipped']) + ' skipped')}")
+        print(f"  {c(C.DIM, 'Subtitle normalize:')} "
+              f"{c(C.SUCCESS, str(_norm.get('sub_renamed', 0)))} renamed, "
+              f"{c(C.WARN if _norm.get('sub_skipped', 0) else C.DIM, str(_norm.get('sub_skipped', 0)) + ' skipped')}")
+    else:
+        print(f"  {c(C.DIM, 'Filename normalize:')} {c(C.DIM, 'skipped (movie-only content)')}")
+        print(f"  {c(C.DIM, 'Subtitle normalize:')} {c(C.DIM, 'skipped (movie-only content)')}")
     # -- Update watch list -----------------------------------------------------
     # Re-query AniList to get current airing status for this season.
     # Reuse the already-fetched season_info for this title/run.
@@ -4988,22 +5251,26 @@ def run_one_season(
         _ep_nums    = sorted(e for r in episodes
                              if (e := extract_episode_number(r["title"])) is not None)
         _last_ep    = _ep_nums[-1] if _ep_nums else 0
-        upsert_watch_entry(
-            anime_dir      = jellyfin_anime_dir,
-            anime_name     = anime_name,
-            season         = season,
-            group          = chosen_group,
-            last_episode   = _last_ep,
-            save_path      = save_path,
-            total_episodes = _total,
-            is_airing      = _is_airing,
-        )
+        if _has_series_content:
+            upsert_watch_entry(
+                anime_dir      = jellyfin_anime_dir,
+                anime_name     = anime_name,
+                season         = season,
+                group          = chosen_group,
+                last_episode   = _last_ep,
+                save_path      = save_path,
+                total_episodes = _total,
+                is_airing      = _is_airing,
+            )
     except Exception as exc:
         print(f"  {c(C.DIM, f'Watch list update skipped ({exc})')}")
 
     # -- Jellyfin library rescan -----------------------------------------------
     print()
-    trigger_jellyfin_rescan(season_label)
+    if _has_series_content:
+        trigger_jellyfin_rescan(season_label, jellyfin_anime_dir)
+    if _has_movie_content:
+        trigger_jellyfin_rescan(f"{season_label} / Movies", movie_root)
 
     VISUAL_STATS["seasons"] += 1
     VISUAL_STATS["encoded_ok"] += 0
@@ -5785,7 +6052,7 @@ def setup_jellyfin_config() -> None:
     print(f"  {c(C.DIM, 'Jellyfin rescan will now run automatically after each completed download batch.')}")
 
 
-def trigger_jellyfin_rescan(season_label: str) -> None:
+def trigger_jellyfin_rescan(season_label: str, library_dir: Path | None = None) -> None:
     """
     Fire a targeted Jellyfin library refresh rather than a full global scan.
 
@@ -5793,8 +6060,8 @@ def trigger_jellyfin_rescan(season_label: str) -> None:
     large anime collections, can take hours.  Instead this function:
 
       1. Authenticates with the stored API key.
-      2. Queries /Library/VirtualFolders to resolve the ItemId of the Anime
-         virtual library (matched by the folder that contains our media).
+      2. Queries /Library/VirtualFolders to resolve the ItemId of the target
+         virtual library (matched by the configured folder path when available).
       3. POSTs to /Items/{ItemId}/Refresh - rescanning only that library.
       4. Falls back to the global endpoint if VirtualFolders lookup fails.
 
@@ -5817,6 +6084,8 @@ def trigger_jellyfin_rescan(season_label: str) -> None:
 
         # -- Step 1: resolve target library ItemId via VirtualFolders ----------
         target_item_id: str | None = None
+        target_library_name: str | None = None
+        _library_dir_norm = str(library_dir).replace("\\", "/").rstrip("/").lower() if library_dir else ""
         try:
             vf_resp = requests.get(
                 f"{base_url}/Library/VirtualFolders",
@@ -5826,10 +6095,21 @@ def trigger_jellyfin_rescan(season_label: str) -> None:
             if vf_resp.status_code == 200:
                 folders = vf_resp.json()
                 for folder in folders:
-                    # Match on folder name heuristic OR on configured library name
                     folder_name = (folder.get("Name") or "").lower()
-                    if "anime" in folder_name:
+                    locations = folder.get("Locations") or []
+                    locations_norm = {
+                        str(loc).replace("\\", "/").rstrip("/").lower()
+                        for loc in locations
+                    }
+                    if _library_dir_norm and _library_dir_norm in locations_norm:
                         target_item_id = folder.get("ItemId")
+                        target_library_name = folder.get("Name")
+                        log.info("Jellyfin: matched library path %r -> ItemId %s",
+                                 library_dir, target_item_id)
+                        break
+                    if not _library_dir_norm and "anime" in folder_name:
+                        target_item_id = folder.get("ItemId")
+                        target_library_name = folder.get("Name")
                         log.info("Jellyfin: matched library %r -> ItemId %s",
                                  folder.get("Name"), target_item_id)
                         break
@@ -5859,7 +6139,7 @@ def trigger_jellyfin_rescan(season_label: str) -> None:
                 print(_jf_sep)
                 print(f"  {c(C.GREEN, 'OK  JELLYFIN LIBRARY SCAN TRIGGERED')}")
                 print(f"     {c(C.WHITE, season_label)}"
-                      f"  {c(C.DIM, f' |  ItemId {target_item_id}')}")
+                      f"  {c(C.DIM, f' |  {target_library_name or "library"} |  ItemId {target_item_id}')}")
                 print(_jf_sep)
                 print()
                 log.info("Jellyfin targeted refresh OK for ItemId=%s", target_item_id)

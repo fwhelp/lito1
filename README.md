@@ -13,6 +13,7 @@ detection, and triggers a Jellyfin rescan when the run completes.
 - Downloads through qBittorrent and monitors progress
 - Detects stuck torrents and retries with a different source strategy
 - Moves episodes and subtitle sidecars into Jellyfin-ready season folders
+- Splits mixed TV + movie batches into TV seasons, `Season 00`, and a separate movie library
 - Triggers Jellyfin library scans after successful routing
 - Supports watch mode for polling currently airing shows
 
@@ -72,6 +73,14 @@ lito1 --watch
 lito1 --watch-status
 lito1 --setup-jellyfin
 ```
+
+## Library Notes
+
+- TV episodes are routed to `Season NN`
+- OVA/special content stays in `Season 00`
+- Movie content is routed to a separate movie-library root
+- Set `[pipeline].movie_library_dir` in `config.toml` if you want a custom movie path
+- If `movie_library_dir` is blank, `lito1` uses a sibling `anime_movies` folder next to your anime TV root
 
 ## Requirements
 
