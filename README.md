@@ -72,6 +72,8 @@ lito1
 lito1 --watch
 lito1 --watch-status
 lito1 --setup-jellyfin
+lito1 --reconcile-library --dry-run
+lito1 --reconcile-library
 ```
 
 ## Library Notes
@@ -81,6 +83,8 @@ lito1 --setup-jellyfin
 - Movie content is routed to a separate movie-library root
 - Set `[pipeline].movie_library_dir` in `config.toml` if you want a custom movie path
 - If `movie_library_dir` is blank, `lito1` uses a sibling `anime_movies` folder next to your anime TV root
+- Use `--reconcile-library` to audit existing media and move obvious movies/specials into the right places
+- Use `--reconcile-library --dry-run` first if you want a preview before anything moves
 
 ## Requirements
 

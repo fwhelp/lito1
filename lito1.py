@@ -4297,6 +4297,8 @@ Examples:
                    help="Poll RSS for all active watch list entries and download new episodes")
     p.add_argument("--watch-status",   action="store_true",
                    help="Print the current watch list and exit")
+    p.add_argument("--reconcile-library", action="store_true",
+                   help="Audit existing media and move obvious movies/specials into the correct Jellyfin locations")
     p.add_argument("--fun", dest="fun", action="store_true", default=True,
                    help="Enable fun visual output/easter eggs (default: on; cosmetic only)")
     p.add_argument("--no-fun", dest="fun", action="store_false",
@@ -5540,6 +5542,141 @@ def print_watchlist_status(anime_dir: Path) -> None:
                   f"{c(C.DIM, f'[{e["group"]}]')}")
 
 
+def reconcile_existing_media_library(anime_dir: Path, dry_run: bool = False) -> dict[str, int]:
+    """
+    Audit the existing anime TV library and reconcile obvious movie/special files.
+
+    Rules:
+      - movie-like files move to the separate movie library
+      - non-TV files in numbered season folders move to Season 00
+      - TV files stay in place; this mode does not invent season structure
+    """
+    movie_root = find_jellyfin_movie_dir(anime_dir)
+    summary = {
+        "series_scanned": 0,
+        "videos_scanned": 0,
+        "movies_moved": 0,
+        "specials_moved": 0,
+        "already_ok": 0,
+        "skipped": 0,
+        "errors": 0,
+    }
+
+    print()
+    divider("Library Reconcile")
+    print(f"  {c(C.LABEL, 'Anime root:')} {c(C.VALUE, str(anime_dir))}")
+    print(f"  {c(C.LABEL, 'Movie root:')} {c(C.VALUE, str(movie_root))}")
+    print(f"  {c(C.DIM, 'Mode:')} {c(C.VALUE, 'DRY-RUN' if dry_run else 'APPLY CHANGES')}")
+
+    season_pat = re.compile(r"^Season (\d{2})$", re.IGNORECASE)
+    series_dirs = sorted(
+        p for p in anime_dir.iterdir()
+        if p.is_dir() and p.name != movie_root.name
+    )
+
+    for series_dir in series_dirs:
+        season_dirs = sorted(
+            p for p in series_dir.iterdir()
+            if p.is_dir() and season_pat.match(p.name)
+        )
+        if not season_dirs:
+            continue
+
+        summary["series_scanned"] += 1
+        anime_name = _series_title_from_dir(series_dir)
+        season_info = fetch_anilist_season_info(anime_name)
+        related_movies = fetch_anilist_related_movies(anime_name)
+
+        print()
+        print(f"  {c(C.AMBER, anime_name)}")
+
+        season00 = series_dir / "Season 00"
+        for season_dir in season_dirs:
+            season_match = season_pat.match(season_dir.name)
+            if not season_match:
+                continue
+            season_num = int(season_match.group(1))
+            default_format = str((season_info.get(season_num) or {}).get("format") or "")
+            default_year = (season_info.get(season_num) or {}).get("year")
+
+            for video in sorted(season_dir.iterdir()):
+                if not video.is_file() or video.suffix.lower() not in _VIDEO_EXT:
+                    continue
+                summary["videos_scanned"] += 1
+                info = _classify_batch_file(
+                    video.name,
+                    anime_name=anime_name,
+                    default_format=default_format,
+                    default_year=default_year,
+                    related_movies=related_movies,
+                )
+                cat = info["category"]
+
+                if cat == "movie":
+                    movie_title = info.get("movie_title") or anime_name
+                    movie_year = info.get("movie_year")
+                    dest = build_movie_target_path(
+                        movie_root,
+                        movie_title,
+                        video.suffix,
+                        movie_year,
+                        create_dirs=not dry_run,
+                    )
+                    if dest.exists():
+                        summary["skipped"] += 1
+                        print(f"    {c(C.WARN, '[SKIP]')} {c(C.MUTED, video.name)} {c(C.DIM, '-> movie target already exists')}")
+                        continue
+                    try:
+                        if not dry_run:
+                            shutil.move(str(video), str(dest))
+                        _route_subtitle_sidecars(video, dest if not dry_run else video, dest.parent)
+                        summary["movies_moved"] += 1
+                        print(f"    {c(C.SUCCESS, 'movie')} {c(C.MUTED, video.name[:48])} {c(C.DIM, '->')} {c(C.VALUE, dest.parent.name)}")
+                    except OSError as exc:
+                        summary["errors"] += 1
+                        print(f"    {c(C.WARN, '[ERROR]')} {c(C.MUTED, video.name)} {c(C.DIM, str(exc))}")
+                    continue
+
+                if cat != "tv" and season_num != 0:
+                    dest = season00 / video.name
+                    if dest.exists():
+                        summary["skipped"] += 1
+                        print(f"    {c(C.WARN, '[SKIP]')} {c(C.MUTED, video.name)} {c(C.DIM, '-> Season 00 target already exists')}")
+                        continue
+                    try:
+                        if not dry_run:
+                            season00.mkdir(parents=True, exist_ok=True)
+                            shutil.move(str(video), str(dest))
+                        _route_subtitle_sidecars(video, dest if not dry_run else video, season00)
+                        summary["specials_moved"] += 1
+                        print(f"    {c(C.CYAN_DIM, 'special')} {c(C.MUTED, video.name[:48])} {c(C.DIM, '->')} {c(C.VALUE, 'Season 00')}")
+                    except OSError as exc:
+                        summary["errors"] += 1
+                        print(f"    {c(C.WARN, '[ERROR]')} {c(C.MUTED, video.name)} {c(C.DIM, str(exc))}")
+                    continue
+
+                summary["already_ok"] += 1
+
+        normalize_series_filenames_for_jellyfin(series_dir, dry_run=dry_run)
+
+    print()
+    divider("Reconcile Summary")
+    print(f"  {c(C.DIM, 'Series scanned:')} {c(C.VALUE2, str(summary['series_scanned']))}")
+    print(f"  {c(C.DIM, 'Videos scanned:')} {c(C.VALUE2, str(summary['videos_scanned']))}")
+    print(f"  {c(C.DIM, 'Movies moved:')} {c(C.SUCCESS, str(summary['movies_moved']))}")
+    print(f"  {c(C.DIM, 'Specials moved:')} {c(C.CYAN_DIM, str(summary['specials_moved']))}")
+    print(f"  {c(C.DIM, 'Already OK:')} {c(C.DIM, str(summary['already_ok']))}")
+    print(f"  {c(C.DIM, 'Skipped:')} {c(C.WARN if summary['skipped'] else C.DIM, str(summary['skipped']))}")
+    print(f"  {c(C.DIM, 'Errors:')} {c(C.WARN if summary['errors'] else C.DIM, str(summary['errors']))}")
+
+    if not dry_run:
+        print()
+        trigger_jellyfin_rescan("Library Reconcile / TV", anime_dir)
+        trigger_jellyfin_rescan("Library Reconcile / Movies", movie_root)
+
+    return summary
+
+
 def poll_rss_for_entry(entry: dict) -> list[dict]:
     """
     Fetch the RSS feed for a watch entry and return ONE torrent per new episode.
@@ -6279,6 +6416,10 @@ def main() -> None:
     # Auto-rebuild watch list from disk if it doesn't exist or is empty
     if not watchlist_path(jellyfin_anime_dir).exists() or not load_watchlist(jellyfin_anime_dir):
         rebuild_watchlist_from_disk(jellyfin_anime_dir)
+
+    if args.reconcile_library:
+        reconcile_existing_media_library(jellyfin_anime_dir, dry_run=args.dry_run)
+        finish_run(any_failure=False, exit_code=0)
 
     # -------------------------------------------------------------------------
     # PHASE 2 - Nyaa search + qBittorrent
