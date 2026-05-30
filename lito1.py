@@ -5621,6 +5621,7 @@ def reconcile_existing_media_library(anime_dir: Path, dry_run: bool = False) -> 
         "movies_moved": 0,
         "specials_moved": 0,
         "staging_dirs_moved": 0,
+        "movie_series_fixed": 0,
         "already_ok": 0,
         "skipped": 0,
         "errors": 0,
@@ -5682,6 +5683,13 @@ def reconcile_existing_media_library(anime_dir: Path, dry_run: bool = False) -> 
         anime_name = _series_title_from_dir(series_dir)
         season_info = fetch_anilist_season_info(anime_name)
         related_movies = fetch_anilist_related_movies(anime_name)
+        root_info = season_info.get(1) or {}
+        movie_only_title = (
+            bool(root_info)
+            and _is_movie_like_format(str(root_info.get("format") or ""))
+            and len(season_info) == 1
+        )
+        movie_series_year = root_info.get("year")
 
         print()
         print(f"  {c(C.AMBER, anime_name)}")
@@ -5707,6 +5715,10 @@ def reconcile_existing_media_library(anime_dir: Path, dry_run: bool = False) -> 
                     related_movies=related_movies,
                 )
                 cat = info["category"]
+                if movie_only_title:
+                    cat = "movie"
+                    info["movie_title"] = anime_name
+                    info["movie_year"] = movie_series_year
 
                 if cat == "movie":
                     movie_title = info.get("movie_title") or anime_name
@@ -5727,6 +5739,8 @@ def reconcile_existing_media_library(anime_dir: Path, dry_run: bool = False) -> 
                             shutil.move(str(video), str(dest))
                         _route_subtitle_sidecars(video, dest if not dry_run else video, dest.parent)
                         summary["movies_moved"] += 1
+                        if movie_only_title:
+                            summary["movie_series_fixed"] += 1
                         print(f"    {c(C.SUCCESS, 'movie')} {c(C.MUTED, video.name[:48])} {c(C.DIM, '->')} {c(C.VALUE, dest.parent.name)}")
                     except OSError as exc:
                         summary["errors"] += 1
@@ -5755,6 +5769,13 @@ def reconcile_existing_media_library(anime_dir: Path, dry_run: bool = False) -> 
 
         normalize_series_filenames_for_jellyfin(series_dir, dry_run=dry_run)
 
+        if not dry_run:
+            for season_dir in season_dirs:
+                if season_dir.is_dir() and not any(season_dir.iterdir()):
+                    season_dir.rmdir()
+            if series_dir.is_dir() and not any(series_dir.iterdir()):
+                series_dir.rmdir()
+
     print()
     divider("Reconcile Summary")
     print(f"  {c(C.DIM, 'Series scanned:')} {c(C.VALUE2, str(summary['series_scanned']))}")
@@ -5762,6 +5783,7 @@ def reconcile_existing_media_library(anime_dir: Path, dry_run: bool = False) -> 
     print(f"  {c(C.DIM, 'Movies moved:')} {c(C.SUCCESS, str(summary['movies_moved']))}")
     print(f"  {c(C.DIM, 'Specials moved:')} {c(C.CYAN_DIM, str(summary['specials_moved']))}")
     print(f"  {c(C.DIM, 'Legacy staging moved:')} {c(C.CYAN_DIM, str(summary['staging_dirs_moved']))}")
+    print(f"  {c(C.DIM, 'Movie-only series fixed:')} {c(C.SUCCESS, str(summary['movie_series_fixed']))}")
     print(f"  {c(C.DIM, 'Already OK:')} {c(C.DIM, str(summary['already_ok']))}")
     print(f"  {c(C.DIM, 'Skipped:')} {c(C.WARN if summary['skipped'] else C.DIM, str(summary['skipped']))}")
     print(f"  {c(C.DIM, 'Errors:')} {c(C.WARN if summary['errors'] else C.DIM, str(summary['errors']))}")
