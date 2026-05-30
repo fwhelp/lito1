@@ -673,6 +673,12 @@ def search_nyaa(query: str, page: int = 1) -> list[dict]:
 
 
 def search_all_pages(query: str, max_pages: int = DEFAULT_PAGES) -> list[dict]:
+    cache_key = (query.strip().lower(), int(max_pages))
+    if cache_key in _SEARCH_CACHE:
+        cached = _SEARCH_CACHE[cache_key]
+        print(f"  {c(C.INFO_DIM, 'Cached search:')} {c(C.VALUE2, str(len(cached)))} results")
+        return [dict(r) for r in cached]
+
     all_results = []
     for page in range(1, max_pages + 1):
         page_results = search_nyaa(query, page)
@@ -685,6 +691,7 @@ def search_all_pages(query: str, max_pages: int = DEFAULT_PAGES) -> list[dict]:
             r["batch_candidate"] = _is_batch_title(r["title"], r.get("size", ""))
         print(f"  {c(C.INFO_DIM, f'Page {page}:')} "
               f"{c(C.VALUE2, str(len(page_results)))} results")
+    _SEARCH_CACHE[cache_key] = [dict(r) for r in all_results]
     return all_results
 
 
@@ -760,6 +767,7 @@ def _is_batch_title(title: str, size_str: str = "") -> bool:
 
 
 _DETAIL_CACHE: dict[str, list[str]] = {}
+_SEARCH_CACHE: dict[tuple[str, int], list[dict]] = {}
 _ANILIST_SEASON_INFO_CACHE: dict[str, dict[int, dict]] = {}
 
 
@@ -2885,6 +2893,50 @@ def wait_for_downloads_or_stuck(
     return {"stuck": False}
 
 
+def collect_current_stuck_downloads(
+    client: qbittorrentapi.Client,
+    monitor: CleanupMonitor,
+    no_progress_secs: int,
+    last_seen: dict[str, tuple[str, float]],
+    stagnant_since: dict[str, float],
+) -> list[dict]:
+    """
+    Return every currently overdue stuck torrent without waiting for another poll.
+    """
+    watched = monitor.watched_snapshot()
+    if not watched:
+        return []
+    try:
+        torrents = {t.hash.lower(): t for t in client.torrents_info()}
+    except Exception:
+        return []
+
+    now = time.time()
+    out: list[dict] = []
+    for info_hash, label in watched.items():
+        t = torrents.get(info_hash)
+        if t is None:
+            continue
+        state = (t.state or "").strip()
+        prog = round(float(t.progress or 0.0), 4)
+        if state in DONE_STATES or state not in STUCK_TRACK_STATES:
+            continue
+        if last_seen.get(info_hash) != (state, prog):
+            continue
+        idle_for = now - stagnant_since.get(info_hash, now)
+        if idle_for >= no_progress_secs:
+            out.append({
+                "stuck": True,
+                "hash": info_hash,
+                "label": label,
+                "state": state,
+                "progress": prog,
+                "idle_for": idle_for,
+            })
+    out.sort(key=lambda x: (-float(x.get("idle_for", 0)), str(x.get("label", ""))))
+    return out
+
+
 def _snapshot_files(root: Path) -> set[str]:
     if not root.is_dir():
         return set()
@@ -4751,84 +4803,95 @@ def run_one_season(
                 )
                 if not stuck.get("stuck"):
                     break
+                stuck_batch = [stuck] + [
+                    s for s in collect_current_stuck_downloads(
+                        client=client,
+                        monitor=monitor,
+                        no_progress_secs=STUCK_NO_PROGRESS_SECS,
+                        last_seen=_stuck_last_seen,
+                        stagnant_since=_stuck_since,
+                    )
+                    if str(s.get("hash", "")).lower() != str(stuck.get("hash", "")).lower()
+                ]
 
-                stuck_hash = str(stuck.get("hash", "")).lower()
-                stuck_label = stuck.get("label", "episode")
-                stuck_state = stuck.get("state", "unknown")
-                stuck_prog = float(stuck.get("progress", 0.0)) * 100.0
-                idle_s = int(stuck.get("idle_for", 0))
-                meta = episode_retry_meta.pop(stuck_hash, None)
+                for stuck_item in stuck_batch:
+                    stuck_hash = str(stuck_item.get("hash", "")).lower()
+                    stuck_label = stuck_item.get("label", "episode")
+                    stuck_state = stuck_item.get("state", "unknown")
+                    stuck_prog = float(stuck_item.get("progress", 0.0)) * 100.0
+                    idle_s = int(stuck_item.get("idle_for", 0))
+                    meta = episode_retry_meta.pop(stuck_hash, None)
 
-                print()
-                print(f"  {c(C.WARN, '[STUCK]')} "
-                      f"{c(C.ORANGE, stuck_label)} {c(C.DIM, f'state={stuck_state} progress={stuck_prog:.1f}%')} "
-                      f"{c(C.DIM, f'no movement for {idle_s}s')}")
+                    print()
+                    print(f"  {c(C.WARN, '[STUCK]')} "
+                          f"{c(C.ORANGE, stuck_label)} {c(C.DIM, f'state={stuck_state} progress={stuck_prog:.1f}%')} "
+                          f"{c(C.DIM, f'no movement for {idle_s}s')}")
 
-                try:
-                    client.torrents_delete(delete_files=True, torrent_hashes=stuck_hash)
-                except Exception:
-                    log.exception("Failed to delete stuck episode torrent %s", stuck_hash)
-                monitor.unwatch(stuck_hash)
-                _stuck_last_seen.pop(stuck_hash, None)
-                _stuck_since.pop(stuck_hash, None)
+                    try:
+                        client.torrents_delete(delete_files=True, torrent_hashes=stuck_hash)
+                    except Exception:
+                        log.exception("Failed to delete stuck episode torrent %s", stuck_hash)
+                    monitor.unwatch(stuck_hash)
+                    _stuck_last_seen.pop(stuck_hash, None)
+                    _stuck_since.pop(stuck_hash, None)
 
-                if not meta:
-                    dead_labels.append(stuck_label)
-                    print(f"  {c(C.WARN, '[DEAD]')} {c(C.DIM, 'No retry metadata for this torrent; leaving episode missing for now.')}")
-                    continue
+                    if not meta:
+                        dead_labels.append(stuck_label)
+                        print(f"  {c(C.WARN, '[DEAD]')} {c(C.DIM, 'No retry metadata for this torrent; leaving episode missing for now.')}")
+                        continue
 
-                if meta["retry_count"] >= STUCK_EPISODE_RETRY_LIMIT:
-                    dead_labels.append(stuck_label)
-                    print(f"  {c(C.WARN, '[DEAD]')} {c(C.DIM, f'retry limit reached ({STUCK_EPISODE_RETRY_LIMIT}) - leaving this episode for manual follow-up.')}")
-                    continue
+                    if meta["retry_count"] >= STUCK_EPISODE_RETRY_LIMIT:
+                        dead_labels.append(stuck_label)
+                        print(f"  {c(C.WARN, '[DEAD]')} {c(C.DIM, f'retry limit reached ({STUCK_EPISODE_RETRY_LIMIT}) - leaving this episode for manual follow-up.')}")
+                        continue
 
-                retry_item, retry_reason = select_retry_episode_result(
-                    raw,
-                    season=meta["season"],
-                    ep_num=meta["ep_num"],
-                    excluded_groups=set(meta["excluded_groups"]),
-                    excluded_detail_urls=set(meta["excluded_detail_urls"]),
-                )
-                if not retry_item:
-                    dead_labels.append(stuck_label)
-                    print(f"  {c(C.WARN, '[DEAD]')} {c(C.DIM, retry_reason)}")
-                    continue
+                    retry_item, retry_reason = select_retry_episode_result(
+                        raw,
+                        season=meta["season"],
+                        ep_num=meta["ep_num"],
+                        excluded_groups=set(meta["excluded_groups"]),
+                        excluded_detail_urls=set(meta["excluded_detail_urls"]),
+                    )
+                    if not retry_item:
+                        dead_labels.append(stuck_label)
+                        print(f"  {c(C.WARN, '[DEAD]')} {c(C.DIM, retry_reason)}")
+                        continue
 
-                retry_grp = extract_sub_group(retry_item["title"]) or ""
-                if retry_grp:
-                    meta["excluded_groups"].add(retry_grp)
-                if retry_item.get("detail_url"):
-                    meta["excluded_detail_urls"].add(retry_item["detail_url"])
-                meta["retry_count"] += 1
+                    retry_grp = extract_sub_group(retry_item["title"]) or ""
+                    if retry_grp:
+                        meta["excluded_groups"].add(retry_grp)
+                    if retry_item.get("detail_url"):
+                        meta["excluded_detail_urls"].add(retry_item["detail_url"])
+                    meta["retry_count"] += 1
 
-                print(f"  {c(C.DIM, 'Retrying:')} {c(C.VALUE, retry_reason)} "
-                      f"{c(C.DIM, '->')} {c(C.VALUE, '[' + retry_grp + ']') if retry_grp else c(C.DIM, '[unknown]')}")
+                    print(f"  {c(C.DIM, 'Retrying:')} {c(C.VALUE, retry_reason)} "
+                          f"{c(C.DIM, '->')} {c(C.VALUE, '[' + retry_grp + ']') if retry_grp else c(C.DIM, '[unknown]')}")
 
-                try:
-                    retry_hash = add_torrent(client, retry_item,
-                                             save_path=save_path,
-                                             category=QBIT_CATEGORY)
-                    if retry_hash == "__lookup__":
-                        resolved = resolve_hash_for_title(client, retry_item["title"])
-                        if resolved:
-                            retry_hash = resolved
+                    try:
+                        retry_hash = add_torrent(client, retry_item,
+                                                 save_path=save_path,
+                                                 category=QBIT_CATEGORY)
+                        if retry_hash == "__lookup__":
+                            resolved = resolve_hash_for_title(client, retry_item["title"])
+                            if resolved:
+                                retry_hash = resolved
+                            else:
+                                dead_labels.append(stuck_label)
+                                print(f"  {c(C.WARN, '[DEAD]')} {c(C.DIM, 'Retry hash could not be resolved.')}")
+                                continue
+                        if retry_hash:
+                            monitor.watch(retry_hash, meta["label"])
+                            episode_retry_meta[retry_hash.lower()] = meta
+                            _stuck_last_seen.pop(retry_hash.lower(), None)
+                            _stuck_since.pop(retry_hash.lower(), None)
+                            print(f"  {c(C.SUCCESS, '\u2713')} {c(C.ORANGE, meta['label'])} "
+                                  f"{c(C.DIM, 'retry added')} {c(C.CYAN_DIM, retry_hash)}")
                         else:
                             dead_labels.append(stuck_label)
-                            print(f"  {c(C.WARN, '[DEAD]')} {c(C.DIM, 'Retry hash could not be resolved.')}")
-                            continue
-                    if retry_hash:
-                        monitor.watch(retry_hash, meta["label"])
-                        episode_retry_meta[retry_hash.lower()] = meta
-                        _stuck_last_seen.pop(retry_hash.lower(), None)
-                        _stuck_since.pop(retry_hash.lower(), None)
-                        print(f"  {c(C.SUCCESS, '\u2713')} {c(C.ORANGE, meta['label'])} "
-                              f"{c(C.DIM, 'retry added')} {c(C.CYAN_DIM, retry_hash)}")
-                    else:
+                            print(f"  {c(C.WARN, '[DEAD]')} {c(C.DIM, 'Retry candidate had no usable URL.')}")
+                    except Exception as exc:
                         dead_labels.append(stuck_label)
-                        print(f"  {c(C.WARN, '[DEAD]')} {c(C.DIM, 'Retry candidate had no usable URL.')}")
-                except Exception as exc:
-                    dead_labels.append(stuck_label)
-                    print(f"  {c(C.WARN, '[DEAD]')} {c(C.DIM, f'Retry add failed: {exc}')}")
+                        print(f"  {c(C.WARN, '[DEAD]')} {c(C.DIM, f'Retry add failed: {exc}')}")
         except KeyboardInterrupt:
             pass
 
