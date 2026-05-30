@@ -4934,7 +4934,7 @@ def rebuild_watchlist_from_disk(anime_dir: Path) -> None:
 
     Logic:
       - Each subdirectory of anime_dir is treated as an anime title
-      - Each Season.XX subdirectory inside it is a season
+      - Each "Season XX" subdirectory inside it is a season
       - AniList is queried to check if the season is currently RELEASING
       - Disk is scanned to find the highest episode present
       - An entry is written for every season that is still airing
@@ -4949,11 +4949,11 @@ def rebuild_watchlist_from_disk(anime_dir: Path) -> None:
     print(f"  {c(C.DIM, str(anime_dir))}")
     print()
 
-    season_pat = re.compile(r"^Season\.(\d+)$", re.IGNORECASE)
+    season_pat = re.compile(r"^Season (\d{2})$", re.IGNORECASE)
     entries: list[dict] = []
     found_airing = 0
 
-    # Walk one level: anime_dir / <Title> / Season.XX
+    # Walk one level: anime_dir / <Title> / Season XX
     try:
         title_dirs = sorted(
             p for p in anime_dir.iterdir()
@@ -4965,7 +4965,7 @@ def rebuild_watchlist_from_disk(anime_dir: Path) -> None:
         return
 
     for title_dir in title_dirs:
-        anime_name = title_dir.name
+        anime_name = _series_title_from_dir(title_dir)
         # Find season subdirectories
         try:
             season_dirs = sorted(
@@ -5058,16 +5058,6 @@ def rebuild_watchlist_from_disk(anime_dir: Path) -> None:
         print(f"  {c(C.SUCCESS, '✓')} Watch list rebuilt - "
               f"{c(C.VALUE2, str(found_airing))} airing season(s) registered.")
         print(f"  {c(C.DIM, str(watchlist_path(anime_dir)))}")
-
-
-    """Load the watch list from the anime root directory. Returns [] if missing."""
-    path = watchlist_path(anime_dir)
-    if not path.exists():
-        return []
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return []
 
 
 def save_watchlist(anime_dir: Path, entries: list[dict]) -> None:
