@@ -883,7 +883,6 @@ _EXTRA_PAT   = re.compile(r"\b(Extra|Bonus)\b",         re.IGNORECASE)
 _SPECIAL_PAT = re.compile(r"\b(SP|Special|Specials)\b", re.IGNORECASE)
 _NCOP_PAT    = re.compile(r"\b(NCOP|NCED|OP|ED)\b",     re.IGNORECASE)
 _VIDEO_EXT   = {".mkv", ".mp4", ".avi", ".m4v", ".ts", ".m2ts"}
-_EP_NUM_PAT  = re.compile(r"(\d{1,4})")
 _SUB_EXT     = {".srt", ".ass", ".ssa", ".vtt", ".sub"}
 _SUB_LANG_HINTS: list[tuple[str, str]] = [
     ("english", "eng"), ("eng", "eng"),
@@ -910,6 +909,21 @@ def _find_matching_subtitles(folder: Path, video_stem: str) -> list[Path]:
         if p.stem == video_stem or p.stem.startswith(video_stem + "."):
             out.append(p)
     return sorted(out)
+
+
+def _fallback_batch_episode_number(stem: str) -> int | None:
+    """
+    Conservative episode fallback for batch file names.
+
+    We only accept obvious episode-like endings and avoid treating resolution
+    markers such as 1080p or 1920x1080 as episode numbers.
+    """
+    if re.fullmatch(r"\d{1,3}", stem):
+        return int(stem)
+    m = re.search(r"(?:^|[\s._-])(?:ep|e)?(\d{1,3})(?:v\d+)?$", stem, re.IGNORECASE)
+    if m:
+        return int(m.group(1))
+    return None
 
 
 def _classify_batch_file(filename: str) -> dict:
@@ -952,12 +966,11 @@ def _classify_batch_file(filename: str) -> dict:
     # Use the anitopy-backed parser first - it correctly ignores years (2024),
     # resolutions (1080), and hash codes when finding the episode number.
     # Fall back to the first bare number only if anitopy returns nothing.
-    m = _EP_NUM_PAT.search(stem)
     ep_num = extract_episode_number(base_name)
     if ep_num is None:
         ep_num = extract_episode_number(filename)
     if ep_num is None:
-        ep_num = int(m.group(1)) if m else None
+        ep_num = _fallback_batch_episode_number(stem)
 
     # Also extract the season number from the filename so multi-season batches
     # (e.g. "Season 1+2" packs) can be routed to the correct season directory.
@@ -1005,6 +1018,7 @@ def classify_batch_files(filenames: list[str]) -> dict:
         "tv_count":           len(tv),
         "special_count":      len(specials),
         "is_confirmed_batch": len(video) >= 2,
+        "is_single_video":    len(video) == 1,
         "seasons_present":    season_nums,
     }
 
@@ -1124,6 +1138,9 @@ def find_best_batch_for_season(
     if not candidates:
         return None
 
+    _fmt = str(((season_info or {}).get(season) or {}).get("format") or "").upper()
+    _allow_single_video = _fmt in {"MOVIE", "SPECIAL", "OVA", "ONA", "OAD"}
+
     def _priority(r):
         grp     = extract_sub_group(r["title"]) or ""
         is_priority = grp in (priority_groups or set())
@@ -1154,6 +1171,10 @@ def find_best_batch_for_season(
                           f"{c(C.DIM, f'(allowed: {_allowed_s})')}")
                     continue
             return r
+        if _allow_single_video:
+            _binfo = r.get("batch_info") or {}
+            if _binfo.get("is_single_video"):
+                return r
         print(f"  {c(C.DIM, '  -> single-file or no file list, skipping')}")
 
     return None
@@ -4142,13 +4163,28 @@ def run_one_season(
         )) >= 720
     }
     batch_priority_summaries: list[str] = []
-    for grp in sorted(batch_only_priority_groups):
+    batch_priority_entries = [
+        e for e in season_ranked if e["group"] in batch_only_priority_groups
+    ]
+    batch_priority_entries.sort(
+        key=lambda e: (
+            -e.get("total_seeders", 0),
+            -e.get("total_leechers", 0),
+            -_title_resolution_rank(next(
+                (r["title"] for r in season_pool_for_rank if extract_sub_group(r["title"]) == e["group"]),
+                "",
+            )),
+            e["group"],
+        )
+    )
+    for entry in batch_priority_entries:
+        grp = entry["group"]
         sample_title = next(
             (r["title"] for r in season_pool_for_rank if extract_sub_group(r["title"]) == grp),
             "",
         )
         res = _title_resolution_rank(sample_title)
-        seeders = next((e["total_seeders"] for e in season_ranked if e["group"] == grp), 0)
+        seeders = entry.get("total_seeders", 0)
         batch_priority_summaries.append(f"[{grp}] {res}p {seeders}S")
 
     for i, entry in enumerate(season_ranked[:top_n], 1):
@@ -5894,15 +5930,28 @@ def main() -> None:
             finish_run(any_failure=False, exit_code=0)
 
     # -- Banner ----------------------------------------------------------------
-    width     = 64
-    title_str = "Anime Pipeline  |  Nyaa → qBittorrent → Jellyfin"
-    pad       = (width - len(title_str)) // 2
-    print(c(C.AMBER, "═" * width))
-    print(c(C.AMBER, "║") +
-          c(C.BANNER, " " * pad + title_str +
-            " " * (width - pad - len(title_str) - 2)) +
-          c(C.AMBER, "║"))
-    print(c(C.AMBER, "═" * width))
+    width = 76
+    inner = width - 2
+    title_str = "ANIME PIPELINE"
+    pipe_str = "Nyaa  ->  qBittorrent  ->  Jellyfin"
+    top_fill = "▓"
+    side = "█"
+
+    def _center_line(text: str, fill: str = " ") -> str:
+        text = f" {text} "
+        if len(text) >= inner:
+            return text[:inner]
+        pad_total = inner - len(text)
+        left = pad_total // 2
+        right = pad_total - left
+        return (fill * left) + text + (fill * right)
+
+    print(c(C.AMBER, top_fill * width))
+    print(c(C.AMBER, side) + c(C.BANNER, _center_line("", " ")) + c(C.AMBER, side))
+    print(c(C.AMBER, side) + c(C.BANNER, _center_line(title_str, " ")) + c(C.AMBER, side))
+    print(c(C.AMBER, side) + c(C.BANNER, _center_line(pipe_str, "·")) + c(C.AMBER, side))
+    print(c(C.AMBER, side) + c(C.BANNER, _center_line("", " ")) + c(C.AMBER, side))
+    print(c(C.AMBER, top_fill * width))
     if VISUAL_FUN:
         print(f"  {magenta('[FUN]')} {dim(random.choice(FUN_ORACLE_LINES))}")
     print(f"  {dim('Theme:')} {amber(VISUAL_THEME)}")
