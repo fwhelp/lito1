@@ -914,6 +914,57 @@ def _find_matching_subtitles(folder: Path, video_stem: str) -> list[Path]:
     return sorted(out)
 
 
+def _route_subtitle_sidecars(
+    src_video: Path,
+    target_video: Path,
+    target_dir: Path,
+    dry_run: bool = False,
+) -> tuple[int, int, int]:
+    """
+    Move/rename subtitle sidecars to match a routed video.
+
+    Returns:
+      (moved_count, skipped_count, detected_count)
+    """
+    sidecars = _find_matching_subtitles(src_video.parent, src_video.stem)
+    if not sidecars:
+        return 0, 0, 0
+
+    moved = 0
+    skipped = 0
+    detected = len(sidecars)
+
+    for sub_src in sidecars:
+        lang = _guess_sub_lang_suffix(sub_src.stem)
+        suffix = sub_src.suffix.lower()
+        base_name = f"{target_video.stem}.{lang}"
+        lower_stem = sub_src.stem.lower()
+        if "forced" in lower_stem:
+            base_name += ".forced"
+        elif "sdh" in lower_stem or lower_stem.endswith(".cc"):
+            base_name += ".sdh"
+
+        sub_target = target_dir / f"{base_name}{suffix}"
+        dedupe_n = 2
+        while sub_target.exists() and sub_target != sub_src:
+            sub_target = target_dir / f"{base_name}.{dedupe_n}{suffix}"
+            dedupe_n += 1
+
+        if dry_run:
+            moved += 1
+            continue
+
+        try:
+            shutil.move(str(sub_src), str(sub_target))
+            moved += 1
+            log.info("Batch subtitle routed: %s -> %s", sub_src.name, sub_target.name)
+        except OSError as exc:
+            skipped += 1
+            log.warning("Subtitle move failed %s -> %s: %s", sub_src, sub_target, exc)
+
+    return moved, skipped, detected
+
+
 def _is_movie_like_format(fmt: str) -> bool:
     return str(fmt or "").upper() in {"MOVIE", "SPECIAL", "OVA", "ONA", "OAD"}
 
@@ -1304,41 +1355,6 @@ def post_process_batch_download(
     sub_skipped = 0
     sub_detected = 0
 
-    def _route_subtitle_sidecars(src_video: Path, target_video: Path, target_dir: Path) -> None:
-        nonlocal sub_moved, sub_skipped, sub_detected
-        sidecars = _find_matching_subtitles(src_video.parent, src_video.stem)
-        if not sidecars:
-            return
-        sub_detected += len(sidecars)
-
-        for sub_src in sidecars:
-            lang = _guess_sub_lang_suffix(sub_src.stem)
-            suffix = sub_src.suffix.lower()
-            base_name = f"{target_video.stem}.{lang}"
-            lower_stem = sub_src.stem.lower()
-            if "forced" in lower_stem:
-                base_name += ".forced"
-            elif "sdh" in lower_stem or lower_stem.endswith(".cc"):
-                base_name += ".sdh"
-
-            sub_target = target_dir / f"{base_name}{suffix}"
-            dedupe_n = 2
-            while sub_target.exists() and sub_target != sub_src:
-                sub_target = target_dir / f"{base_name}.{dedupe_n}{suffix}"
-                dedupe_n += 1
-
-            if dry_run:
-                sub_moved += 1
-                continue
-
-            try:
-                shutil.move(str(sub_src), str(sub_target))
-                sub_moved += 1
-                log.info("Batch subtitle routed: %s -> %s", sub_src.name, sub_target.name)
-            except OSError as exc:
-                sub_skipped += 1
-                log.warning("Subtitle move failed %s -> %s: %s", sub_src, sub_target, exc)
-
     print()
     divider("Batch Post-Processing -- Routing Files")
 
@@ -1393,7 +1409,10 @@ def post_process_batch_download(
             dest_dir.mkdir(parents=True, exist_ok=True)
             if dest.exists():
                 print(f"  {yellow('[EXISTS]')} {c(C.DIM, src.name)}")
-                _route_subtitle_sidecars(src, dest, dest_dir)
+                _m, _s, _d = _route_subtitle_sidecars(src, dest, dest_dir, dry_run=dry_run)
+                sub_moved += _m
+                sub_skipped += _s
+                sub_detected += _d
                 moved[bucket].append(dest)
                 continue
             try:
@@ -1413,7 +1432,10 @@ def post_process_batch_download(
         else:
             label = c(C.DIM, "Season 00 (Specials)")
         print(f"  {c(C.SUCCESS, tag)} {c(C.MUTED, src.name[:52])} {c(C.DIM, '->')} {label}")
-        _route_subtitle_sidecars(src, dest if not dry_run else src, dest_dir)
+        _m, _s, _d = _route_subtitle_sidecars(src, dest if not dry_run else src, dest_dir, dry_run=dry_run)
+        sub_moved += _m
+        sub_skipped += _s
+        sub_detected += _d
         moved[bucket].append(dest if not dry_run else src)
         if bucket == "tv":
             routed_tv_by_season[file_season].append(file_info.get("ep_num"))
