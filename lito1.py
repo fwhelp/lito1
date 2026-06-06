@@ -1526,19 +1526,27 @@ def _parse_title(title: str) -> dict:
         return _parse_cache[title]
     result: dict = {}
     if _ANITOPY_AVAILABLE:
-        result = _anitopy.parse(title)
-    elif _GUESSIT_AVAILABLE:
+        try:
+            result = _anitopy.parse(title)
+        except Exception as exc:
+            log.debug("anitopy parse failed for %r: %s", title, exc)
+            result = {}
+    if not result and _GUESSIT_AVAILABLE:
         # guessit returns a GuessIt dict - map keys to anitopy field names so
         # the rest of the code doesn't need to change.
-        gi = dict(_guessit(title))
-        result = {
-            "release_group":  gi.get("release_group", ""),
-            "anime_season":   gi.get("season", ""),
-            "episode_number": gi.get("episode", ""),
-            "anime_type":     gi.get("type", ""),
-            "video_resolution": gi.get("screen_size", ""),
-        }
-        log.debug("guessit fallback parsed %r -> %s", title, json.dumps(result))
+        try:
+            gi = dict(_guessit(title))
+            result = {
+                "release_group":  gi.get("release_group", ""),
+                "anime_season":   gi.get("season", ""),
+                "episode_number": gi.get("episode", ""),
+                "anime_type":     gi.get("type", ""),
+                "video_resolution": gi.get("screen_size", ""),
+            }
+            log.debug("guessit fallback parsed %r -> %s", title, json.dumps(result))
+        except Exception as exc:
+            log.debug("guessit parse failed for %r: %s", title, exc)
+            result = {}
     _parse_cache[title] = result
     return result
 
