@@ -1659,19 +1659,30 @@ def _batch_title_matches_series_family(
         "movies", "special", "specials", "ova", "ovas", "ona", "oad",
         "sp", "episode", "episodes", "ep", "uncensored", "uncut", "dual",
         "audio", "multi", "subs", "sub", "dub", "hevc", "x264", "x265",
-        "10bit", "8bit", "aac", "flac", "opus", "v2", "v3",
+        "10bit", "8bit", "aac", "flac", "opus", "v2", "v3", "web", "webdl",
+        "webrip", "dl", "nf", "amzn", "dsnp", "cr", "avc", "h264", "h265",
+        "h", "264", "265", "multiaudio", "multiaudio", "multisubs", "multisub",
     }
 
     for alias_norm in alias_norms:
         if alias_norm not in title_norm:
             continue
+        alias_words = [w for w in alias_norm.split() if w]
+        alias_acronym = "".join(w[0] for w in alias_words if w and w[0].isalnum())
         remainder = re.sub(rf"\b{re.escape(alias_norm)}\b", " ", title_norm, count=1)
         leftover = [
             tok for tok in remainder.split()
             if not tok.isdigit()
             and not re.fullmatch(r"s\d{1,2}|e\d{1,3}|[sp]\d{1,3}|v\d+", tok, re.IGNORECASE)
             and tok not in generic_tokens
+            and tok != alias_acronym
         ]
+
+        # If the only unmatched token looks like a release group tag, still
+        # treat it as the same series family.
+        if len(leftover) == 1 and re.fullmatch(r"[a-z0-9][a-z0-9._-]{1,31}", leftover[0], re.IGNORECASE):
+            return True
+
         if len(leftover) <= 3:
             return True
     return False
