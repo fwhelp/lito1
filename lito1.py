@@ -1295,6 +1295,20 @@ def find_best_batch_for_season(
 
     candidates.sort(key=_priority)
 
+    confirmed_candidates: list[dict] = []
+
+    def _confirmed_priority(r: dict) -> tuple[int, int, float, int, int]:
+        grp = extract_sub_group(r["title"]) or ""
+        is_priority = grp in (priority_groups or set())
+        is_pref = (grp == prefer_group or grp in PREFERRED_GROUPS)
+        return (
+            0 if is_priority else 1,
+            -_title_resolution_rank(r["title"]),
+            -_torrent_score(r),
+            0 if is_pref else 1,
+            -int(r.get("completed", 0)),
+        )
+
     for r in candidates:
         print(f"  {c(C.DIM, 'Inspecting batch candidate:')} {c(C.MUTED, r['title'][:60])}")
         if not _batch_title_matches_series_family(r["title"], anime_name, season_info):
@@ -1317,14 +1331,19 @@ def find_best_batch_for_season(
                     print(f"  {c(C.WARN, '[SKIP]')} {c(C.DIM, f'batch includes unrequested seasons: {_extra_s}')} "
                           f"{c(C.DIM, f'(allowed: {_allowed_s})')}")
                     continue
-            return r
+            confirmed_candidates.append(r)
+            continue
         if _allow_single_video:
             _binfo = r.get("batch_info") or {}
             if _binfo.get("is_single_video"):
-                return r
+                confirmed_candidates.append(r)
+                continue
         print(f"  {c(C.DIM, '  -> single-file or no file list, skipping')}")
 
-    return None
+    if not confirmed_candidates:
+        return None
+    confirmed_candidates.sort(key=_confirmed_priority)
+    return confirmed_candidates[0]
 
 
 def post_process_batch_download(
@@ -1756,12 +1775,30 @@ def get_result_season_number(result: dict) -> int:
 
 
 def extract_sub_group(title: str) -> str | None:
+    invalid_group_labels = {
+        "dual audio", "multi-audio", "multi audio", "multi-subs", "multi subs",
+        "multiple subs", "multiple subtitles", "multiple subtitle", "multi",
+    }
+
     if _ANITOPY_AVAILABLE:
-        grp = _parse_title(title).get("release_group", "")
-        return grp.strip().lower() if grp else None
+        grp = (_parse_title(title).get("release_group", "") or "").strip().lower()
+        if grp and grp not in invalid_group_labels:
+            return grp
+
     # Regex fallback
     m = re.match(r"^\[([^\]]+)\]", title.strip())
-    return m.group(1).strip().lower() if m else None
+    if m:
+        grp = m.group(1).strip().lower()
+        if grp and grp not in invalid_group_labels:
+            return grp
+
+    # Unbracketed tail-group fallback, e.g. "... H 264-VARYG (Multi-Audio...)"
+    m = re.search(r"-([A-Za-z0-9][A-Za-z0-9._-]{1,31})(?:\s*(?:\(|$))", title.strip())
+    if m:
+        grp = m.group(1).strip().lower()
+        if grp and grp not in invalid_group_labels and not re.fullmatch(r"\d{3,4}p", grp):
+            return grp
+    return None
 
 
 def _torrent_score(r: dict) -> float:
