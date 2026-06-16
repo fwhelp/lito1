@@ -2210,6 +2210,58 @@ def filter_episodes_any_group(
     return [ep_candidates[ep] for ep in sorted(ep_candidates)]
 
 
+def select_standalone_title_result(
+    results: list[dict],
+    anime_name: str,
+    season: int,
+    season_info: dict[int, dict] | None = None,
+    related_movies: list[dict] | None = None,
+) -> dict | None:
+    """
+    Choose the best single-result source for standalone special / OVA / movie
+    titles that do not expose normal episode numbers on Nyaa.
+
+    This keeps one-off titles from falling through to an empty season list.
+    """
+    sinfo = (season_info or {}).get(season) or {}
+    default_format = str(sinfo.get("format") or "")
+    default_year = sinfo.get("year")
+
+    candidates: list[dict] = []
+    for r in results:
+        if get_result_season_number(r) != season:
+            continue
+        if extract_episode_number(r["title"]) is not None:
+            continue
+        cl = _classify_batch_file(
+            r["title"],
+            anime_name=anime_name,
+            default_format=default_format,
+            default_year=default_year,
+            related_movies=related_movies,
+        )
+        if cl["category"] not in {"movie", "special", "ova", "ona", "oad", "encore"}:
+            continue
+        item = dict(r)
+        item["_synthetic_ep_num"] = 1
+        item["_synthetic_category"] = cl["category"]
+        item["_synthetic_movie_title"] = cl.get("movie_title")
+        item["_synthetic_movie_year"] = cl.get("movie_year")
+        candidates.append(item)
+
+    if not candidates:
+        return None
+
+    candidates.sort(
+        key=lambda r: (
+            -_title_resolution_rank(r["title"]),
+            -_torrent_score(r),
+            -int(r.get("completed", 0)),
+        )
+    )
+    return candidates[0]
+
+
 def select_retry_episode_result(
     results: list[dict],
     season: int,
@@ -4458,6 +4510,7 @@ def run_one_season(
     related_movies = fetch_anilist_related_movies(anime_name)
     movie_root = find_jellyfin_movie_dir(jellyfin_anime_dir, create_dirs=not args.dry_run)
     routed_batch: dict[str, list[Path]] | None = None
+    standalone_title_mode = False
 
     print(f"\n{SEP_HASH}")
     print(magenta(f"  >  {season_label}"))
@@ -4608,6 +4661,22 @@ def run_one_season(
         # a complete-pack torrent (e.g. "Ichigo Mashimaro TV+OVA+Encore").
         # Returning early was the bug: it prevented batch detection from running.
 
+    if not episodes:
+        standalone_pick = select_standalone_title_result(
+            raw,
+            anime_name=anime_name,
+            season=season,
+            season_info=season_info,
+            related_movies=related_movies,
+        )
+        if standalone_pick:
+            standalone_title_mode = True
+            episodes = [standalone_pick]
+            _cat = standalone_pick.get("_synthetic_category", "standalone")
+            print(f"  {c(C.INFO_DIM, '[Standalone]')} "
+                  f"{c(C.DIM, f'Using best available {_cat} source for this one-off title.')} "
+                  f"{c(C.VALUE, '[' + (extract_sub_group(standalone_pick['title']) or '?') + ']')}")
+
     # Step 2: proactive handoff detection
     # Build the handoff-aware episode list.  detect_group_handoffs() checks every
     # episode in the pool and fills gaps from the primary group with the best
@@ -4615,13 +4684,16 @@ def run_one_season(
     # discover them reactively.
     print()
     divider(f"Checking Group Continuity - {season_label}")
-    pool_for_season = [r for r in raw if get_result_season_number(r) == season]
-    episodes = detect_group_handoffs(
-        pool_for_season, chosen_group, season, episode_range, season_ranked
-    )
-    if not episodes:
-        # detect_group_handoffs returns [] only if pool_for_season is empty
-        episodes = filter_episodes(raw, chosen_group, season, episode_range)
+    if standalone_title_mode:
+        print(f"  {c(C.DIM, 'Standalone title - skipping continuity/handoff analysis.')}")
+    else:
+        pool_for_season = [r for r in raw if get_result_season_number(r) == season]
+        episodes = detect_group_handoffs(
+            pool_for_season, chosen_group, season, episode_range, season_ranked
+        )
+        if not episodes:
+            # detect_group_handoffs returns [] only if pool_for_season is empty
+            episodes = filter_episodes(raw, chosen_group, season, episode_range)
 
     # -- Batch torrent check ---------------------------------------------------
     # Decision tree:
@@ -4659,7 +4731,7 @@ def run_one_season(
 
     # Determine whether to look for a batch at all
     _coverage_thin = _have == 0 or (_expected and _have < int(_expected * 0.75))
-    _check_batch   = (not force_no_batch) and (_coverage_thin or (not _is_airing))
+    _check_batch   = (not force_no_batch) and (not standalone_title_mode) and (_coverage_thin or (not _is_airing))
     if force_no_batch:
         print(f"  {c(C.DIM, 'Batch selection disabled for this retry (stuck torrent fallback).')}")
 
@@ -4715,7 +4787,7 @@ def run_one_season(
             print(f"  {c(C.DIM, 'No qualifying batch found - using per-episode results.')}")
 
     # -- AniList verification + gap fill  (skipped when using a batch) ---------
-    if not _using_batch:
+    if not _using_batch and not standalone_title_mode:
         episodes = verify_episode_coverage(
             episodes, anime_name, season, raw, chosen_group, args, episode_range
         )
@@ -4745,7 +4817,7 @@ def run_one_season(
             print()
 
         for ep in episodes:
-            ep_num  = extract_episode_number(ep["title"])
+            ep_num  = ep.get("_synthetic_ep_num") or extract_episode_number(ep["title"])
             ep_seas = extract_season_number(ep["title"])
             ep_id   = c(C.ORANGE, f"S{ep_seas:02d}E{ep_num:>3}")
             seeds   = c(C.VALUE2, f"{ep.get('seeders', 0):>4}")
@@ -5114,7 +5186,7 @@ def run_one_season(
         pending_label_meta: dict[str, dict] = {}
 
         for ep in episodes:
-            ep_num  = extract_episode_number(ep["title"])
+            ep_num  = ep.get("_synthetic_ep_num") or extract_episode_number(ep["title"])
             ep_seas = extract_season_number(ep["title"])
             label   = f"S{ep_seas:02d}E{ep_num:>3}"
             grp     = extract_sub_group(ep["title"]) or ""
@@ -5315,17 +5387,46 @@ def run_one_season(
         _sp_dir    = Path(build_save_path(jellyfin_anime_dir, anime_name, season)).parent / "Season 00"
         _tv_dir    = Path(save_path)
         _reclassed = 0
+        _movie_reclassed = 0
+        _default_format = str((season_info.get(season) or {}).get("format") or "")
+        _default_year = (season_info.get(season) or {}).get("year")
         for _p in list(_tv_dir.iterdir()):
             if not _p.is_file() or _p.suffix.lower() not in _VIDEO_EXT:
                 continue
-            _cl = _classify_batch_file(_p.name)
-            if _cl["category"] != "tv":
+            _cl = _classify_batch_file(
+                _p.name,
+                anime_name=anime_name,
+                default_format=_default_format,
+                default_year=_default_year,
+                related_movies=related_movies,
+            )
+            if _cl["category"] == "movie":
+                _dest = build_movie_target_path(
+                    movie_root,
+                    _cl.get("movie_title") or anime_name,
+                    _p.suffix,
+                    _cl.get("movie_year"),
+                    create_dirs=not args.dry_run,
+                )
+                if not args.dry_run:
+                    if not _dest.exists():
+                        try:
+                            shutil.move(str(_p), str(_dest))
+                            _route_subtitle_sidecars(_p, _dest, _dest.parent)
+                            log.info("Reclassed %s -> movie library", _p.name)
+                            _movie_reclassed += 1
+                        except OSError as exc:
+                            log.warning("Movie reclass move failed: %s: %s", _p.name, exc)
+                else:
+                    _movie_reclassed += 1
+            elif _cl["category"] != "tv":
                 if not args.dry_run:
                     _sp_dir.mkdir(parents=True, exist_ok=True)
                     _dest = _sp_dir / _p.name
                     if not _dest.exists():
                         try:
                             shutil.move(str(_p), str(_dest))
+                            _route_subtitle_sidecars(_p, _dest, _sp_dir)
                             log.info("Reclassed %s -> Season 00", _p.name)
                             _reclassed += 1
                         except OSError as exc:
@@ -5334,6 +5435,8 @@ def run_one_season(
                     _reclassed += 1
         if _reclassed:
             print(f"  {c(C.CYAN_DIM, str(_reclassed))} file(s) reclassified to Season 00")
+        if _movie_reclassed:
+            print(f"  {c(C.SUCCESS, str(_movie_reclassed))} file(s) reclassified to movie library")
 
     # Encoding/transcoding phase removed: files go directly from qBittorrent to Jellyfin.
     # Continue with watch list update + Jellyfin rescan only.
@@ -6668,6 +6771,15 @@ def main() -> None:
         if s not in season_map:
             batch_only_seasons.add(s)
         season_map.setdefault(s, set()).update(eps)
+
+    # Standalone OVA / special / movie titles can have valid Nyaa results
+    # without parseable episode numbers. Synthesize one selectable slot so the
+    # run doesn't silently end with an empty season list.
+    if not season_map and raw:
+        _root_info = season_info.get(1) or {}
+        _root_fmt = str(_root_info.get("format") or "").upper()
+        if _root_fmt in {"MOVIE", "SPECIAL", "OVA", "ONA", "OAD"}:
+            season_map[1] = {1}
 
     print()
     divider("Available Seasons")
