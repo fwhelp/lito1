@@ -774,6 +774,7 @@ _DETAIL_CACHE: dict[str, list[str]] = {}
 _SEARCH_CACHE: dict[tuple[str, int], list[dict]] = {}
 _ANILIST_SEASON_INFO_CACHE: dict[str, dict[int, dict]] = {}
 _ANILIST_RELATED_MOVIES_CACHE: dict[str, list[dict]] = {}
+_ANILIST_HOST_SERIES_CACHE: dict[str, dict | None] = {}
 
 
 def _collect_torrent_leaf_entries(node, parents: list[str] | None = None) -> list[str]:
@@ -2538,6 +2539,105 @@ def fetch_anilist_related_movies(anime_name: str) -> list[dict]:
         return []
 
 
+def fetch_anilist_host_series_info(anime_name: str) -> dict | None:
+    """
+    Resolve a host series for one-off specials / short OVAs so they can be
+    routed into a single Jellyfin series entry instead of appearing as their
+    own blank title card.
+
+    Conservative rule:
+      - only merge titles that are SPECIAL/OVA/ONA/OAD with <= 3 episodes
+      - choose the nearest related non-movie/non-special series as host
+      - prefer TV/TV_SHORT, otherwise allow OVA/ONA as the host container
+    """
+    cache_key = _normalize_title_for_match(anime_name)
+    if cache_key in _ANILIST_HOST_SERIES_CACHE:
+        return _ANILIST_HOST_SERIES_CACHE[cache_key]
+
+    try:
+        resp = requests.post(
+            ANILIST_API,
+            json={"query": _ANILIST_QUERY, "variables": {"search": anime_name}},
+            timeout=10,
+        )
+        if resp.status_code != 200:
+            _ANILIST_HOST_SERIES_CACHE[cache_key] = None
+            return None
+        data = resp.json()
+        entries = data.get("data", {}).get("Page", {}).get("media", [])
+        if not entries:
+            _ANILIST_HOST_SERIES_CACHE[cache_key] = None
+            return None
+
+        best = entries[0]
+        fmt = str(best.get("format") or "").upper()
+        total_eps = best.get("episodes") or 1
+        if fmt not in {"SPECIAL", "OVA", "ONA", "OAD"}:
+            _ANILIST_HOST_SERIES_CACHE[cache_key] = None
+            return None
+        if fmt in {"OVA", "ONA"} and int(total_eps or 0) > 3:
+            _ANILIST_HOST_SERIES_CACHE[cache_key] = None
+            return None
+
+        def _node_title(node: dict) -> str:
+            title_obj = node.get("title") or {}
+            return (
+                title_obj.get("english")
+                or title_obj.get("romaji")
+                or title_obj.get("native")
+                or anime_name
+            )
+
+        relation_rank = {
+            "PREQUEL": 0,
+            "SEQUEL": 1,
+            "PARENT": 2,
+            "SIDE_STORY": 3,
+            "ALTERNATIVE": 4,
+        }
+        host_candidates: list[tuple[tuple, dict]] = []
+        for edge in (best.get("relations", {}) or {}).get("edges", []):
+            node = edge.get("node") or {}
+            node_fmt = str(node.get("format") or "").upper()
+            if node_fmt not in {"TV", "TV_SHORT", "OVA", "ONA"}:
+                continue
+            node_eps = int(node.get("episodes") or 0)
+            if node_fmt in {"OVA", "ONA"} and node_eps <= 3:
+                continue
+            host_candidates.append((
+                (
+                    relation_rank.get(edge.get("relationType") or "", 99),
+                    0 if node_fmt in {"TV", "TV_SHORT"} else 1,
+                    -node_eps,
+                    node.get("seasonYear") or 0,
+                ),
+                {
+                    "host_title": sanitise_name(_node_title(node)),
+                    "host_format": node_fmt,
+                    "source_title": sanitise_name(_node_title(best)),
+                    "source_format": fmt,
+                    "source_year": best.get("seasonYear") or None,
+                    "source_episodes": total_eps,
+                }
+            ))
+
+        if not host_candidates:
+            _ANILIST_HOST_SERIES_CACHE[cache_key] = None
+            return None
+
+        host_candidates.sort(key=lambda item: item[0])
+        chosen = host_candidates[0][1]
+        if chosen["host_title"].lower() == sanitise_name(anime_name).lower():
+            _ANILIST_HOST_SERIES_CACHE[cache_key] = None
+            return None
+        _ANILIST_HOST_SERIES_CACHE[cache_key] = chosen
+        return chosen
+    except Exception:
+        log.exception("fetch_anilist_host_series_info failed for %r", anime_name)
+        _ANILIST_HOST_SERIES_CACHE[cache_key] = None
+        return None
+
+
 # Thin compatibility wrapper used elsewhere in the script
 def fetch_anilist_episode_counts(anime_name: str) -> dict[int, int | None]:
     info = fetch_anilist_season_info(anime_name)
@@ -3003,7 +3103,7 @@ def build_save_path(anime_dir: Path, anime_name: str, season: int | None,
     if provider_id:
         series_name = f"{series_name} [{sanitise_name(provider_id)}]"
     # Jellyfin requires "Season NN" - NOT "Season.NN" or raw season names
-    season_folder = f"Season {season:02d}" if season else "Season 01"
+    season_folder = f"Season {season:02d}" if season is not None else "Season 01"
     save_path = anime_dir / series_name / season_folder
     save_path.mkdir(parents=True, exist_ok=True)
     log.debug("build_save_path -> %s", save_path)
@@ -4508,6 +4608,8 @@ def run_one_season(
     excluded_groups = excluded_groups or set()
     season_info = season_info or fetch_anilist_season_info(anime_name)
     related_movies = fetch_anilist_related_movies(anime_name)
+    host_series_info = fetch_anilist_host_series_info(anime_name)
+    library_series_name = (host_series_info or {}).get("host_title") or anime_name
     movie_root = find_jellyfin_movie_dir(jellyfin_anime_dir, create_dirs=not args.dry_run)
     routed_batch: dict[str, list[Path]] | None = None
     standalone_title_mode = False
@@ -4676,6 +4778,10 @@ def run_one_season(
             print(f"  {c(C.INFO_DIM, '[Standalone]')} "
                   f"{c(C.DIM, f'Using best available {_cat} source for this one-off title.')} "
                   f"{c(C.VALUE, '[' + (extract_sub_group(standalone_pick['title']) or '?') + ']')}")
+            if host_series_info:
+                print(f"  {c(C.INFO_DIM, '[Host series]')} "
+                      f"{c(C.DIM, 'Will route under')} {c(C.VALUE, library_series_name)} "
+                      f"{c(C.DIM, '-> Season 00')}")
 
     # Step 2: proactive handoff detection
     # Build the handoff-aware episode list.  detect_group_handoffs() checks every
@@ -4848,9 +4954,10 @@ def run_one_season(
             return True
 
     # -- Save path -------------------------------------------------------------
+    effective_save_season = 0 if standalone_title_mode and host_series_info else season
     print()
     divider(f"qBittorrent - {season_label}")
-    save_path = build_save_path(jellyfin_anime_dir, anime_name, season)
+    save_path = build_save_path(jellyfin_anime_dir, library_series_name, effective_save_season)
     print(f"  {c(C.LABEL, 'Save path:')} {c(C.VALUE, save_path)}")
     print(f"  {c(C.SUCCESS, '✓')} {c(C.INFO_DIM, 'Directory created / verified.')}")
 
@@ -5781,6 +5888,7 @@ def reconcile_existing_media_library(anime_dir: Path, dry_run: bool = False) -> 
         "specials_moved": 0,
         "staging_dirs_moved": 0,
         "movie_series_fixed": 0,
+        "franchise_merges": 0,
         "already_ok": 0,
         "skipped": 0,
         "errors": 0,
@@ -5842,6 +5950,7 @@ def reconcile_existing_media_library(anime_dir: Path, dry_run: bool = False) -> 
         anime_name = _series_title_from_dir(series_dir)
         season_info = fetch_anilist_season_info(anime_name)
         related_movies = fetch_anilist_related_movies(anime_name)
+        host_series_info = fetch_anilist_host_series_info(anime_name)
         root_info = season_info.get(1) or {}
         movie_only_title = (
             bool(root_info)
@@ -5852,6 +5961,46 @@ def reconcile_existing_media_library(anime_dir: Path, dry_run: bool = False) -> 
 
         print()
         print(f"  {c(C.AMBER, anime_name)}")
+
+        if host_series_info:
+            host_title = host_series_info["host_title"]
+            host_dir = anime_dir / sanitise_name(host_title)
+            host_season00 = host_dir / "Season 00"
+            moved_here = 0
+            try:
+                if dry_run:
+                    print(f"    {c(C.CYAN_DIM, 'merge')} {c(C.MUTED, anime_name)} {c(C.DIM, '->')} {c(C.VALUE, host_title + ' / Season 00')}")
+                    summary["franchise_merges"] += 1
+                else:
+                    host_season00.mkdir(parents=True, exist_ok=True)
+                    for season_dir in sorted(p for p in series_dir.iterdir() if p.is_dir()):
+                        for video in sorted(season_dir.iterdir()):
+                            if not video.is_file() or video.suffix.lower() not in _VIDEO_EXT:
+                                continue
+                            dest = host_season00 / video.name
+                            if dest.exists():
+                                summary["skipped"] += 1
+                                continue
+                            shutil.move(str(video), str(dest))
+                            _route_subtitle_sidecars(video, dest, host_season00)
+                            moved_here += 1
+                    if moved_here:
+                        summary["specials_moved"] += moved_here
+                    summary["franchise_merges"] += 1
+                    print(f"    {c(C.CYAN_DIM, 'merge')} {c(C.MUTED, anime_name)} {c(C.DIM, '->')} {c(C.VALUE, host_title + ' / Season 00')}")
+            except OSError as exc:
+                summary["errors"] += 1
+                print(f"    {c(C.WARN, '[ERROR]')} {c(C.MUTED, anime_name)} {c(C.DIM, str(exc))}")
+                continue
+
+            if not dry_run:
+                normalize_series_filenames_for_jellyfin(host_dir, dry_run=False)
+                for season_dir in sorted(p for p in series_dir.iterdir() if p.is_dir()):
+                    if season_dir.is_dir() and not any(season_dir.iterdir()):
+                        season_dir.rmdir()
+                if series_dir.is_dir() and not any(series_dir.iterdir()):
+                    series_dir.rmdir()
+            continue
 
         season00 = series_dir / "Season 00"
         for season_dir in season_dirs:
@@ -5943,6 +6092,7 @@ def reconcile_existing_media_library(anime_dir: Path, dry_run: bool = False) -> 
     print(f"  {c(C.DIM, 'Specials moved:')} {c(C.CYAN_DIM, str(summary['specials_moved']))}")
     print(f"  {c(C.DIM, 'Legacy staging moved:')} {c(C.CYAN_DIM, str(summary['staging_dirs_moved']))}")
     print(f"  {c(C.DIM, 'Movie-only series fixed:')} {c(C.SUCCESS, str(summary['movie_series_fixed']))}")
+    print(f"  {c(C.DIM, 'Franchise merges:')} {c(C.CYAN_DIM, str(summary['franchise_merges']))}")
     print(f"  {c(C.DIM, 'Already OK:')} {c(C.DIM, str(summary['already_ok']))}")
     print(f"  {c(C.DIM, 'Skipped:')} {c(C.WARN if summary['skipped'] else C.DIM, str(summary['skipped']))}")
     print(f"  {c(C.DIM, 'Errors:')} {c(C.WARN if summary['errors'] else C.DIM, str(summary['errors']))}")
